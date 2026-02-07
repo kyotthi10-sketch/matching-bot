@@ -8,10 +8,11 @@ from db import (
     init_db, get_state, set_state, save_answer, load_answers, reset_user,
     count_total_users, count_completed_users, count_inprogress_users
 )
+from collections import defaultdict, Counter
 
 # ===== 環境変数 =====
 TOKEN = os.environ["DISCORD_TOKEN"]
-GUILD_ID = int(os.environ["GUILD_ID"])
+GUILD_ID = int(os.environ["1466960571004882967"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "Bot-管理者")
 
@@ -49,16 +50,87 @@ def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
         and channel.name == f"match-{user_id}"
         and channel.topic == f"user:{user_id}"
     )
+SCALE = {"A": 0, "B": 50, "C": 100}
 
-# ===== 診断結果（簡易）=====
-def simple_result(user_id: int) -> str:
+def build_profile(user_id: int):
+    """
+    returns:
+      picks: dict(category -> "A"/"B"/"C")  最頻回答
+      meters: dict(category -> 0..100)      平均％（A=0,B=50,C=100）
+    """
     answers = load_answers(user_id)
-    a = sum(1 for _, v in answers if v == "A")
-    b = sum(1 for _, v in answers if v == "B")
-    if a >= b:
-        return "🧠 **安心重視型**\n慎重・安定志向・聞き手タイプ"
-    else:
-        return "🔥 **行動優先型**\n積極的・テンポ速め・外向きタイプ"
+    qid_to_cat = {q["id"]: q.get("category") for q in QUESTIONS}
+
+    by_cat = defaultdict(list)
+    for qid, ans in answers:
+        cat = qid_to_cat.get(qid)
+        if cat and ans in ("A", "B", "C"):
+            by_cat[cat].append(ans)
+
+    picks = {}
+    meters = {}
+    for cat, lst in by_cat.items():
+        c = Counter(lst)
+        picks[cat] = c.most_common(1)[0][0]
+        meters[cat] = int(round(sum(SCALE[x] for x in lst) / len(lst)))
+
+    return picks, meters
+
+def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
+    usable = [c for c in categories if c in picks_a and c in picks_b]
+    if not usable:
+        return 0
+    same = sum(1 for c in usable if picks_a[c] == picks_b[c])
+    # 0〜100pt
+    return int(round(same / len(usable) * 100))
+
+# ===== 診断結果（カテゴライズ）=====
+def categorized_result(user_id: int) -> str:
+    picks, meters = build_profile(user_id)
+
+    # 表示したいカテゴリ（あなたの questions.py の category 名に合わせて）
+    # ここに無いカテゴリは表示されません（増やしたらここに追加）
+    CATS = ["game_style", "communication", "real_priority", "distance", "money", "play_time", "future"]
+
+    # 日本語ラベル
+    LABEL = {
+        "game_style": "🎮 ゲーム志向",
+        "communication": "💬 コミュニケーション",
+        "real_priority": "🏠 リアル優先度",
+        "distance": "🧍 距離感",
+        "money": "💰 お金/課金感覚",
+        "play_time": "🕒 プレイ頻度/時間帯",
+        "future": "🧭 将来観",
+    }
+
+    # A/B/Cの意味（カテゴリごとに微調整したい場合はここをいじる）
+    TEXT = {
+        "game_style": {"A":"エンジョイ寄り", "B":"バランス", "C":"ガチ志向"},
+        "communication": {"A":"テキスト派", "B":"状況次第", "C":"VC重視"},
+        "real_priority": {"A":"リアル優先", "B":"両立型", "C":"ゲームも重視"},
+        "distance": {"A":"自立距離", "B":"バランス", "C":"密接"},
+        "money": {"A":"堅実派", "B":"バランス", "C":"体験/課金OK"},
+        "play_time": {"A":"控えめ", "B":"中くらい", "C":"多め"},
+        "future": {"A":"自然に", "B":"早めに相談", "C":"最初から擦り合わせ"},
+    }
+
+    lines = []
+    shown = 0
+    for cat in CATS:
+        if cat in picks:
+            shown += 1
+            pct = meters.get(cat, 50)
+            lines.append(f"{LABEL.get(cat, cat)}：{TEXT.get(cat, {}).get(picks[cat], picks[cat])}（{pct}%）")
+
+    # 「相性％」は /match で相手と比較して出すのが自然なので
+    # ここでは “あなたの指標” を％で必ず見せる（要求①）
+    header = "🧩 **診断結果（ゲーム × リアル）**\n"
+    footer = "\n\n🔎 相性％（TOP3）は `/match` で表示できます。"
+    if shown == 0:
+        return "🧩 **診断結果**\n\nデータが不足しています。/start からやり直してください。" + footer
+
+    return header + "\n".join(lines) + footer
+
 
 # ===== 自動削除 =====
 async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, seconds: int):
@@ -114,7 +186,7 @@ class AnswerButton(discord.ui.Button):
 
             msg = (
                 "✅ **診断完了！**\n\n"
-                + simple_result(self.user_id)
+                + categorized_result(self.user_id)
                 + f"\n\n⏳ このルームは {AUTO_CLOSE_SECONDS//60} 分後に自動削除されます。\n"
                   "すぐ消す場合は `/close`"
             )
@@ -216,3 +288,4 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
