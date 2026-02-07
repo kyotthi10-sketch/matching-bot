@@ -763,7 +763,7 @@ async def ping(interaction: discord.Interaction):
 
     await interaction.response.send_message("🏓 pong!", ephemeral=True)
 
-@bot.tree.command(name="sync", description="コマンドを同期（管理者用）", guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(name="sync", description="コマンドを同期（管理者用）")
 async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
@@ -846,6 +846,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
