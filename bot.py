@@ -157,7 +157,12 @@ def categorized_result(user_id: int) -> str:
         if cat in picks:
             shown += 1
             pct = meters.get(cat, 50)
-          　lines.append(f"{LABEL.get(cat, cat)}：{TEXT.get(cat, {}).get(picks[cat], picks[cat])}  {stars(picks[cat])}")
+            lines.append(
+                f"{LABEL.get(cat, cat)}："
+                f"{TEXT.get(cat, {}).get(picks[cat], picks[cat])}  "
+                f"{stars(picks[cat])}"
+            )
+
 
 
     # 「相性％」は /match で相手と比較して出すのが自然なので
@@ -464,6 +469,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
