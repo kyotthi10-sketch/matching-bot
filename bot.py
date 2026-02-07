@@ -830,26 +830,24 @@ async def logs(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="sync", description="コマンドを同期（管理者用）")
+@bot.tree.command(name="sync", description="コマンドを同期（運営専用）")
 async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
-       # ロールチェック
-    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message(
-            "このコマンドは運営専用です。",
-            ephemeral=True
-        )
+    # 運営ロールチェックはあなたの実装に合わせてOK
+    if not has_role(interaction.user, ADMIN_ROLE_ID):
+        await interaction.response.send_message("権限がありません。", ephemeral=True)
         return
 
-    guild = discord.Object(id=GUILD_ID)
-    await bot.tree.sync(guild=guild)
-    await interaction.response.send_message("✅ 同期しました。", ephemeral=True)
+    synced = await bot.tree.sync(guild=interaction.guild)
+    await interaction.response.send_message(f"✅ 同期しました（{len(synced)}件）。", ephemeral=True)
+
 
 
 bot.run(TOKEN)
+
 
 
 
