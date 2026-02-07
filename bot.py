@@ -343,10 +343,11 @@ async def upsert_question_message(
     embed = build_question_embed(idx, len(order), q)
     view = AnswerView(user_id, idx, order)
 
-    mid = get_message_id(user_id)
+    mid = await asyncio.to_thread(get_message_id, user_id)
+
     if mid is None:
         msg = await channel.send(embed=embed, view=view)
-        set_message_id(user_id, msg.id)
+        await asyncio.to_thread(set_message_id, user_id, msg.id)
         return msg
 
     try:
@@ -355,9 +356,8 @@ async def upsert_question_message(
         return msg
     except Exception:
         msg = await channel.send(embed=embed, view=view)
-        set_message_id(user_id, msg.id)
+        await asyncio.to_thread(set_message_id, user_id, msg.id)
         return msg
-
 
 # ===== 自動削除 =====
 async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, seconds: int):
@@ -461,9 +461,9 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
    
     async def callback(self, interaction: discord.Interaction):
-    # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
-    if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
+    　　# ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
+       if not interaction.response.is_done():
+    await interaction.response.defer(ephemeral=True)
 
     # 他人の操作は followup で返す（responseはもう使わない）
     if interaction.user.id != self.user_id:
@@ -784,6 +784,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
