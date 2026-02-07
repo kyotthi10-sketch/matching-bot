@@ -17,8 +17,8 @@ from collections import defaultdict, Counter
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
-BOTADMIN_ROLE_NAME = os.environ.get("BOTADMIN_ROLE_NAME", "Bot-管理者")
-ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "運営")
+BOTADMIN_ROLE_NAME = os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467")
+ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_ID", "1469624897587118081")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
 CATEGORY_LABEL = {
     "game_style": "ゲーム志向",
@@ -649,6 +649,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
