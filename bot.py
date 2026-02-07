@@ -15,6 +15,7 @@ TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["1466960571004882967"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "Bot-管理者")
+ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
 
 
 intents = discord.Intents.default()
@@ -330,7 +331,13 @@ async def stats(interaction: discord.Interaction):
     if not has_admin_role(interaction.user):
         await interaction.response.send_message("権限がありません（管理者ロールが必要です）。", ephemeral=True)
         return
-
+# ✅ 管理者チャンネル限定
+if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
+    await interaction.response.send_message(
+        "このコマンドは管理者チャンネルでのみ使用できます。",
+        ephemeral=True
+    )
+    return
     total = count_total_users()
     completed = count_completed_users(len(QUESTIONS))
     inprogress = count_inprogress_users(len(QUESTIONS))
@@ -350,5 +357,6 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
