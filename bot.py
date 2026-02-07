@@ -461,6 +461,8 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
    
     async def callback(self, interaction: discord.Interaction):
+        print("BUTTON CLICK", self.user_id, self.idx, self.key)
+
     　　# ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
        if not interaction.response.is_done():
     await interaction.response.defer(ephemeral=True)
@@ -784,6 +786,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
