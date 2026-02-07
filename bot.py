@@ -763,24 +763,6 @@ async def ping(interaction: discord.Interaction):
 
     await interaction.response.send_message("🏓 pong!", ephemeral=True)
 
-@bot.tree.command(name="sync", description="コマンドを同期（管理者用）")
-async def sync_cmd(interaction: discord.Interaction):
-    if interaction.guild is None:
-        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
-        return
-
-       # ロールチェック
-    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message(
-            "このコマンドは運営専用です。",
-            ephemeral=True
-        )
-        return
-
-    guild = discord.Object(id=GUILD_ID)
-    await bot.tree.sync(guild=guild)
-    await interaction.response.send_message("✅ 同期しました。", ephemeral=True)
-
 
 @bot.tree.command(name="panel", description="診断開始ボタンを設置（運営専陽）")
 async def panel(interaction: discord.Interaction):
@@ -845,7 +827,28 @@ async def logs(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+
+@bot.tree.command(name="sync", description="コマンドを同期（管理者用）")
+async def sync_cmd(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+
+       # ロールチェック
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message(
+            "このコマンドは運営専用です。",
+            ephemeral=True
+        )
+        return
+
+    guild = discord.Object(id=GUILD_ID)
+    await bot.tree.sync(guild=guild)
+    await interaction.response.send_message("✅ 同期しました。", ephemeral=True)
+
+
 bot.run(TOKEN)
+
 
 
 
