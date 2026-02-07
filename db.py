@@ -21,6 +21,12 @@ def init_db() -> None:
         )
         """)
         con.commit()
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS question_order (
+            user_id INTEGER PRIMARY KEY,
+            order_json TEXT NOT NULL
+        )
+        """)
 
 def get_state(user_id: int) -> int:
     with sqlite3.connect(DB_PATH) as con:
@@ -90,3 +96,30 @@ def count_inprogress_users(total_questions: int) -> int:
             (total_questions,)
         )
         return int(cur.fetchone()[0])
+
+import json
+import random
+
+def get_or_create_order(user_id: int, question_ids: list[int]) -> list[int]:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("SELECT order_json FROM question_order WHERE user_id=?", (user_id,))
+        row = cur.fetchone()
+        if row:
+            return json.loads(row[0])
+
+        ids = question_ids[:]  # copy
+        random.shuffle(ids)
+        cur.execute(
+            "INSERT OR REPLACE INTO question_order(user_id, order_json) VALUES(?, ?)",
+            (user_id, json.dumps(ids))
+        )
+        con.commit()
+        return ids
+
+def reset_order(user_id: int) -> None:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("DELETE FROM question_order WHERE user_id=?", (user_id,))
+        con.commit()
+
