@@ -464,8 +464,8 @@ async def close(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
-@bot.tree.command(name="stats", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
-async def stats(interaction: discord.Interaction):
+@bot.tree.command(name="logs", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
+async def logs(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
@@ -511,6 +511,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
