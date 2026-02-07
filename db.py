@@ -1,6 +1,5 @@
 import sqlite3
 from typing import List, Tuple
-from db import get_message_id, set_message_id, reset_message_id
 
 DB_PATH = "app.db"
 
