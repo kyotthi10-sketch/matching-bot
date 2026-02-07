@@ -2,6 +2,7 @@ import os
 import asyncio
 import discord
 from discord.ext import commands
+_synced_once = False
 
 from questions import QUESTIONS
 from db import (
@@ -513,12 +514,41 @@ async def create_or_open_room(interaction: discord.Interaction):
 # ===== イベント =====
 @bot.event
 async def on_ready():
-    init_db()
-    bot.add_view(StartRoomView())  # ボタンを永続化している場合
-    guild = discord.Object(id=GUILD_ID)
-    await bot.tree.sync(guild=guild)
-    print(f"Bot起動: {bot.user}")
+    global _synced_once
 
+    init_db()
+
+    # 永続View（custom_id方式なら add_view は不要だが、StartRoomViewを使うならOK）
+    try:
+        bot.add_view(StartRoomView())
+    except Exception as e:
+        print("add_view failed:", repr(e))
+
+    # on_ready は再接続でも何度も呼ばれるので、syncは1回だけにする
+    if not _synced_once:
+        try:
+            # ✅ guildが取れるならそれでsync（GUILD_IDが間違っていても落とさない）
+            if isinstance(GUILD_ID, int) and GUILD_ID > 0:
+                guild = discord.Object(id=GUILD_ID)
+                await bot.tree.sync(guild=guild)
+                print(f"✅ Synced guild commands: {GUILD_ID}")
+            else:
+                # GUILD_ID未設定ならグローバルsync（反映に時間がかかる）
+                await bot.tree.sync()
+                print("✅ Synced global commands")
+
+            _synced_once = True
+
+        except discord.Forbidden:
+            # 以前出た Missing Access 対策：落とさず続行
+            print("⚠️ Sync failed: Missing Access (Forbidden). GUILD_ID or bot access may be wrong.")
+            _synced_once = True  # 連打しない（必要なら /sync で手動）
+        except Exception as e:
+            # 一時的なAPI障害などでも落ちない
+            print("⚠️ Sync failed:", repr(e))
+            _synced_once = True
+
+    print(f"Bot起動: {bot.user}")
 @bot.event
 async def on_member_join(member: discord.Member):
     if member.bot:
@@ -778,7 +808,7 @@ async def sync_cmd(interaction: discord.Interaction):
     await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
 
 
-@bot.tree.command(name="panel", description="診断開始ボタンを設置（指定ロール専用）")
+@bot.tree.command(name="panel", description="診断開始ボタンを設置（運営専陽）")
 async def panel(interaction: discord.Interaction):
 
     # ロールチェック
@@ -842,6 +872,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
