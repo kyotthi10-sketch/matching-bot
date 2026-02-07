@@ -562,13 +562,12 @@ async def on_member_join(member: discord.Member):
     # ✅ 3秒制限回避：即ACK
     if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
-
-      try:
+        try:
         # ans:{user_id}:{idx}:{key}
         _, uid_s, idx_s, key = cid.split(":")
         user_id = int(uid_s)
         idx = int(idx_s)
-
+        
         # 他人操作拒否
         if interaction.user.id != user_id:
             await interaction.followup.send(
@@ -887,6 +886,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
