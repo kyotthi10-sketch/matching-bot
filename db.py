@@ -63,3 +63,30 @@ def reset_user(user_id: int) -> None:
         cur.execute("DELETE FROM answers WHERE user_id=?", (user_id,))
         cur.execute("DELETE FROM user_state WHERE user_id=?", (user_id,))
         con.commit()
+import sqlite3
+
+DB_PATH = "app.db"  # 既にある場合は不要
+
+def count_total_users() -> int:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM user_state")
+        return int(cur.fetchone()[0])
+
+def count_completed_users(total_questions: int) -> int:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM user_state WHERE idx >= ?",
+            (total_questions,)
+        )
+        return int(cur.fetchone()[0])
+
+def count_inprogress_users(total_questions: int) -> int:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM user_state WHERE idx < ?",
+            (total_questions,)
+        )
+        return int(cur.fetchone()[0])
