@@ -237,20 +237,9 @@ def categorized_result(user_id: int) -> str:
     - 各カテゴリ：文章 + ★表示
     """
     picks, meters = build_profile(user_id)
-    # picks : {"game_style": "D", ...}
-    # meters: {"game_style": 4.2, ...}  # 1.0〜5.0 の平均想定
 
-    # 表示するカテゴリ（30問構成）
-    CATS = [
-        "game_style",
-        "communication",
-        "play_time",
-        "distance",
-        "money",
-        "future",
-    ]
+    CATS = ["game_style", "communication", "play_time", "distance", "money", "future"]
 
-    # 日本語ラベル
     LABEL = {
         "game_style": "🎮 ゲームスタイル",
         "communication": "💬 コミュニケーション",
@@ -260,7 +249,6 @@ def categorized_result(user_id: int) -> str:
         "future": "🧭 将来観・価値観",
     }
 
-    # 5段階（A〜E）の意味づけ（カテゴリ別）
     TEXT = {
         "game_style": {
             "A": "エンジョイ重視で気楽に楽しむ",
@@ -311,25 +299,20 @@ def categorized_result(user_id: int) -> str:
         if cat not in picks:
             continue
 
-        letter = picks[cat]          # A〜E
+        letter = picks[cat]  # A〜E
         desc = TEXT[cat].get(letter, letter)
-        star = stars(letter)         # ★☆☆☆☆ 表示
+        star = stars(letter)
 
-        lines.append(
-            f"{LABEL.get(cat, cat)}：{desc}\n{star}"
-        )
+        lines.append(f"{LABEL.get(cat, cat)}：{desc}\n{star}")
 
-    return "\n\n".join(lines)
-
-
-    # 「相性％」は /match で相手と比較して出すのが自然なので
-    # ここでは “あなたの指標” を％で必ず見せる（要求①）
-    header = "🧩 **診断結果**\n"
+    header = "🧩 **診断結果**\n\n"
     footer = "\n\n🔎 相性％（TOP3）は `/match` で表示できます。"
-    if shown == 0:
-        return "🧩 **診断結果**\n\nデータが不足しています。/start からやり直してください。" + footer
 
-    return header + "\n".join(lines) + footer
+    if not lines:
+        return header + "データが不足しています。/start からやり直してください。" + footer
+
+    return header + "\n\n".join(lines) + footer
+
 # ===== メッセージ固定 =====
 async def upsert_question_message(
     channel: discord.TextChannel,
@@ -844,6 +827,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
