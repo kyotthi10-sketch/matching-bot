@@ -296,6 +296,51 @@ class AnswerButton(discord.ui.Button):
         self.idx = idx
         self.order = order
         self.key = key
+class StartRoomView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="診断を始める",
+        style=discord.ButtonStyle.success,
+        custom_id="start_room_button"
+    )
+    async def start_room_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None:
+            await interaction.response.send_message("サーバー内で押してください。", ephemeral=True)
+            return
+        await create_or_open_room(interaction)
+
+async def create_or_open_room(interaction: discord.Interaction):
+    guild = interaction.guild
+    user_id = interaction.user.id
+    channel_name = f"match-{user_id}"
+
+    for ch in guild.text_channels:
+        if is_user_room(ch, user_id):
+            await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
+            return
+
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=False),
+        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+    }
+
+    ch = await guild.create_text_channel(
+        channel_name,
+        topic=f"user:{user_id}",
+        overwrites=overwrites
+    )
+
+    reset_user(user_id)
+    reset_order(user_id)
+    reset_message_id(user_id)
+
+    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+    await upsert_question_message(ch, user_id, 0, order)
+
+    await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
 
 async def callback(self, interaction: discord.Interaction):
     # 他人のボタン操作を防止
@@ -548,6 +593,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
