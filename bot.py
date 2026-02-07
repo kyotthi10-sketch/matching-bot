@@ -452,6 +452,10 @@ async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
         return
 
+# 3秒制限回避：最初に応答を確定
+if not interaction.response.is_done():
+    await interaction.response.defer(ephemeral=True)
+
     # まず回答保存
     q = q_by_id(self.order[self.idx])
     save_answer(self.user_id, q["id"], self.key)
@@ -772,6 +776,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
