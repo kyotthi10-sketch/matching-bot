@@ -100,7 +100,7 @@ def count_inprogress_users(total_questions: int) -> int:
 def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
     return (
         isinstance(channel, discord.TextChannel)
-        and channel.name == f"match-{user_id}"
+        and (channel.topic or "").startswith(f"user:{user_id}")
         and channel.topic == f"user:{user_id}"
     )
 from collections import defaultdict, Counter
@@ -633,7 +633,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 
 # ===== コマンド =====
 
-@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始")
+@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
 async def room(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
@@ -830,16 +830,19 @@ async def logs(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="sync", description="コマンドを同期（運営専用）",guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(name="sync", description="コマンドを同期（運営専用）", guild=discord.Object(id=GUILD_ID))
 async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
-    # 運営ロールチェックはあなたの実装に合わせてOK
-    if not has_role(interaction.user, ADMIN_ROLE_ID):
+    # 運営チェック（あなたの実装でOK）
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
         await interaction.response.send_message("権限がありません。", ephemeral=True)
         return
+
+    # ✅ 追加：グローバルコマンドをこのサーバーへコピー
+    bot.tree.copy_global_to(guild=interaction.guild)
 
     synced = await bot.tree.sync(guild=interaction.guild)
     await interaction.response.send_message(f"✅ 同期しました（{len(synced)}件）。", ephemeral=True)
@@ -847,6 +850,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
