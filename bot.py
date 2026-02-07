@@ -6,8 +6,11 @@ from discord.ext import commands
 from questions import QUESTIONS
 from db import (
     init_db, get_state, set_state, save_answer, load_answers, reset_user,
-    count_total_users, count_completed_users, count_inprogress_users,get_or_create_order, reset_order
+    get_or_create_order, reset_order,
+    get_message_id, set_message_id, reset_message_id,
+    count_total_users, count_completed_users, count_inprogress_users
 )
+
 from collections import defaultdict, Counter
 
 # ===== 環境変数 =====
@@ -403,6 +406,7 @@ async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
     print(f"Bot起動: {bot.user}")
+    
 # ===== ボタンで開始 =====   
 async def create_or_open_room(interaction: discord.Interaction):
     guild = interaction.guild
@@ -593,6 +597,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
