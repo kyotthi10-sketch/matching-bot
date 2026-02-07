@@ -514,6 +514,8 @@ async def create_or_open_room(interaction: discord.Interaction):
 # ===== イベント =====
 @bot.event
 async def on_ready():
+    print("commands:", [c.name for c in bot.tree.get_commands()])
+
     init_db()
     try:
         bot.add_view(StartRoomView())
@@ -848,6 +850,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
