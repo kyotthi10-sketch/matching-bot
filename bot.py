@@ -570,7 +570,7 @@ async def on_member_join(member: discord.Member):
                 idx = int(idx_s)
 
         # 他人操作拒否
-            if interaction.user.id != user_id:
+        if interaction.user.id != user_id:
                 await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
                 return
                 
@@ -859,6 +859,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
