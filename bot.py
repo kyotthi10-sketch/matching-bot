@@ -331,7 +331,7 @@ async def stats(interaction: discord.Interaction):
     if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
         await interaction.response.send_message(
             "このコマンドは管理者チャンネルでのみ使用できます。",
-            ephemeral=True
+            ephemeral=False
         )
         return
 
@@ -368,6 +368,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
