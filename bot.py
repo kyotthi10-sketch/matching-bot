@@ -629,9 +629,17 @@ async def create_or_open_room(interaction: discord.Interaction):
 # ===== コマンド =====
 @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
 async def room(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+    await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+    return
+
+member: discord.Member = interaction.user
+user_id = member.id
+name = member.display_name
+
     guild = interaction.guild
     user_id = interaction.user.id
-    safe_name = safe_channel_name(member.display_name)
+    safe_name = safe_channel_name(menber.display_name)
     channel_name = f"match-{safe_name}"
     
     # 既存ルーム再利用
@@ -830,6 +838,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
