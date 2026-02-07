@@ -16,6 +16,15 @@ GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "Bot-管理者")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
+CATEGORY_LABEL = {
+    "game_style": "ゲーム志向",
+    "communication": "コミュニケーション",
+    "real_priority": "リアル優先度",
+    "distance": "距離感",
+    "money": "お金・課金感覚",
+    "play_time": "プレイ頻度",
+    "future": "将来観",
+}
 
 
 intents = discord.Intents.default()
@@ -81,6 +90,37 @@ def progress_bar(current: int, total: int, width: int = 10) -> str:
     filled = int(round((current / total) * width))
     filled = max(0, min(width, filled))
     return "■" * filled + "□" * (width - filled)
+
+def build_question_embed(idx: int, total: int, q: dict) -> discord.Embed:
+    embed = discord.Embed(
+        title="🎮 診断（ゲーム × リアル）",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(
+        name="📊 進捗",
+        value=f"{progress_bar(idx + 1, total, 12)}  {idx + 1} / {total}",
+        inline=False
+    )
+
+    embed.add_field(
+        name="❓ 質問",
+        value=f"Q{idx + 1}. {q['text']}",
+        inline=False
+    )
+
+    cat = q.get("category")
+    if cat:
+        embed.add_field(
+            name="🧩 カテゴリ",
+            value=CATEGORY_LABEL.get(cat, cat),
+            inline=True
+        )
+
+    embed.set_footer(text="★が多いほど強い／頻度が高い傾向です")
+
+    return embed
+    
 
 def progress_text(idx: int, total: int) -> str:
     # idx は 0始まり。表示は 1/total
@@ -174,26 +214,30 @@ def categorized_result(user_id: int) -> str:
 
     return header + "\n".join(lines) + footer
 # ===== メッセージ固定 =====
-async def upsert_question_message(channel: discord.TextChannel, user_id: int, idx: int, order: list[int]):
+async def upsert_question_message(
+    channel: discord.TextChannel,
+    user_id: int,
+    idx: int,
+    order: list[int]
+):
     qid = order[idx]
     q = q_by_id(qid)
-    header = progress_text(idx, len(order))
-    content = f"{header}\nQ{idx+1}. {q['text']}"
+
+    embed = build_question_embed(idx, len(order), q)
     view = AnswerView(user_id, idx, order)
 
     mid = get_message_id(user_id)
     if mid is None:
-        msg = await channel.send(content, view=view)
+        msg = await channel.send(embed=embed, view=view)
         set_message_id(user_id, msg.id)
         return msg
 
     try:
         msg = await channel.fetch_message(mid)
-        await msg.edit(content=content, view=view)
+        await msg.edit(embed=embed, view=view)
         return msg
     except Exception:
-        # メッセージが消された等 → 作り直す
-        msg = await channel.send(content, view=view)
+        msg = await channel.send(embed=embed, view=view)
         set_message_id(user_id, msg.id)
         return msg
 
@@ -272,7 +316,8 @@ class AnswerButton(discord.ui.Button):
 
         if next_idx >= len(self.order):
             msg = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
-            await interaction.response.edit_message(content=msg, view=None)
+            await msg.edit(content=result_text, embed=None, view=None)
+
        else:
     nq = q_by_id(self.order[next_idx])
     header = progress_text(next_idx, len(self.order))
@@ -469,6 +514,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
