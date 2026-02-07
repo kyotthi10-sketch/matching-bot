@@ -33,6 +33,7 @@ CATEGORY_LABEL = {
 
 
 intents = discord.Intents.default()
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ===== 共通変数 =====
@@ -663,6 +664,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
