@@ -460,32 +460,29 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
 
 async def callback(self, interaction: discord.Interaction):
-   # 他人の操作は即返す
+    # 他人の操作は即返す
     if interaction.user.id != self.user_id:
-      await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
-      return
+        await interaction.response.send_message(
+            "これはあなたの診断ではありません。",
+            ephemeral=True
+        )
+        return
 
-  # ✅ 3秒制限回避：最初に必ずACK
+    # 3秒制限回避：最初に必ずACK
     await interaction.response.defer(ephemeral=True)
-
-  # ✅ 重い処理は別スレッドへ（sqliteなど）
-     q = q_by_id(self.order[self.idx])
-    await asyncio.to_thread(save_answer, self.user_id, q["id"], self.key)
-
 
     try:
         # --- 回答保存 ---
         q = q_by_id(self.order[self.idx])
-        save_answer(self.user_id, q["id"], self.key)
+        await asyncio.to_thread(save_answer, self.user_id, q["id"], self.key)
 
         next_idx = self.idx + 1
         set_state(self.user_id, next_idx)
 
-        # --- 完了処理 ---
+        # --- 診断完了 ---
         if next_idx >= len(self.order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
 
-            # 固定メッセージを結果に差し替え
             mid = get_message_id(self.user_id)
             msg = None
             if mid:
@@ -494,31 +491,34 @@ async def callback(self, interaction: discord.Interaction):
                 except Exception:
                     msg = None
 
-            if msg:
-                await msg.edit(
-                    content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。",
-                    embed=None,
-                    view=None
-                )
-            else:
-                await interaction.followup.send(
-                    result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。",
-                    ephemeral=True
-                )
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
 
-            # ✅ 自動削除スタート（チャンネルを消す）
-            asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
+            if msg:
+                await msg.edit(content=result_text + notice, embed=None, view=None)
+            else:
+                await interaction.followup.send(result_text + notice, ephemeral=True)
+
+            # 自動削除開始
+            asyncio.create_task(
+                schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS)
+            )
             return
 
-        # --- 次の質問へ（固定メッセージを更新） ---
-        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
+        # --- 次の質問へ ---
+        await upsert_question_message(
+            interaction.channel,
+            self.user_id,
+            next_idx,
+            self.order
+        )
 
     except Exception as e:
-        # 例外で沈黙すると「失敗しました」になるので、必ずフォローアップで返す
-        await interaction.followup.send(f"⚠️ エラーが発生しました：{type(e).__name__}", ephemeral=True)
+        await interaction.followup.send(
+            f"⚠️ エラーが発生しました：{type(e).__name__}",
+            ephemeral=True
+        )
         raise
-        # まだ続くなら、固定メッセージを「次の質問Embed」に更新
-        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
+
 
 # ===== イベント =====
 @bot.event
@@ -793,6 +793,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
