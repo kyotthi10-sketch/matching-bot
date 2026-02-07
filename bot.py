@@ -602,38 +602,46 @@ async def on_interaction(interaction: discord.Interaction):
 # ===== ボタンで開始 =====   
 async def create_or_open_room(interaction: discord.Interaction):
     guild = interaction.guild
-    user_id = interaction.user.id
-    channel_name = f"match-{user_id}"
+    member: discord.Member = interaction.user
+    user_id = member.id
+
+    safe_name = safe_channel_name(member.display_name)
+    # 同名対策（おすすめ）
+    channel_name = f"match-{safe_name}-{user_id % 10000}"
 
     # 既存ルーム再利用
     for ch in guild.text_channels:
         if is_user_room(ch, user_id):
             await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
-            return
+        return
+
+    # Bot自身(Member)が取れない場合は中断
+    if guild.me is None:
+        await interaction.response.send_message("Bot情報の取得に失敗しました。少し待ってから再度実行してください。", ephemeral=True)
+    return
 
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=False),
+        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
         guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
     }
 
     ch = await guild.create_text_channel(
         channel_name,
-        topic=f"user:{user_id}",
+        topic=f"user:{user_id} name:{member.display_name}",
         overwrites=overwrites
     )
 
-    # 初期化
-    reset_user(user_id)
-    reset_order(user_id)
-    reset_message_id(user_id)
-
-    # 出題順
-    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
-    await upsert_question_message(ch, user_id, 0, order)
-
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
 
+    # 初期化（sqliteはブロックするので to_thread）
+    await asyncio.to_thread(reset_user, user_id)
+    await asyncio.to_thread(reset_order, user_id)
+    await asyncio.to_thread(reset_message_id, user_id)
+
+    # 出題順を作って開始
+    order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
+    await upsert_question_message(ch, user_id, 0, order)
 
 
 # ===== コマンド =====
@@ -855,6 +863,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
