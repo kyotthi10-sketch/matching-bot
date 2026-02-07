@@ -297,63 +297,58 @@ class AnswerButton(discord.ui.Button):
         self.order = order
         self.key = key
 
-    async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message(
-                "これはあなたの診断ではありません。",
-                ephemeral=True
-            )
-              return
-            else:
-                await interaction.response.defer()  # まず応答を確定
-                await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
+async def callback(self, interaction: discord.Interaction):
+    # 他人のボタン操作を防止
+    if interaction.user.id != self.user_id:
+        await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
+        return
 
-        q = q_by_id(self.order[self.idx])
-        save_answer(self.user_id, q["id"], self.key)
+    # まず回答保存
+    q = q_by_id(self.order[self.idx])
+    save_answer(self.user_id, q["id"], self.key)
 
-        next_idx = self.idx + 1
-        set_state(self.user_id, next_idx)
+    # 次へ
+    next_idx = self.idx + 1
+    set_state(self.user_id, next_idx)
 
-        if next_idx >= len(self.order):
-            msg = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
-            await msg.edit(content=result_text, embed=None, view=None)
-
-       else:
-    nq = q_by_id(self.order[next_idx])
-    header = progress_text(next_idx, len(self.order))
-    await interaction.response.edit_message(
-        content=f"{header}\nQ{next_idx + 1}. {nq['text']}",
-        view=AnswerView(self.user_id, next_idx, self.order)
-    )
-
-            )
-
-        # 最終質問
-        if next_idx >= len(self.order):
+    # ここで一旦応答を確定（時間切れ防止）
     await interaction.response.defer()
 
-    # ロック解除（あなたの設計があるなら）
-    if is_user_room(interaction.channel, self.user_id):
-        await interaction.channel.set_permissions(interaction.user, send_messages=True)
+    # 最終問題なら結果表示（固定メッセージを結果に差し替え）
+    if next_idx >= len(self.order):
+        # 診断完了でロック解除（あなたの運用がC=削除なら解除は任意）
+        if is_user_room(interaction.channel, self.user_id):
+            try:
+                await interaction.channel.set_permissions(interaction.user, send_messages=True)
+            except Exception:
+                pass
 
-    mid = get_message_id(self.user_id)
-    msg = None
-    if mid:
-        try:
-            msg = await interaction.channel.fetch_message(mid)
-        except Exception:
-            msg = None
+        result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
 
-    result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
+        # 固定メッセージを編集して結果にする
+        mid = get_message_id(self.user_id)
+        msg = None
+        if mid:
+            try:
+                msg = await interaction.channel.fetch_message(mid)
+            except Exception:
+                msg = None
 
-    if msg:
-        await msg.edit(content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後に自動削除 / すぐ消すなら /close", view=None)
-    else:
-        await interaction.channel.send(result_text)
+        if msg:
+            await msg.edit(
+                content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後に自動削除 / すぐ消すなら /close",
+                embed=None,
+                view=None
+            )
+        else:
+            await interaction.channel.send(result_text)
 
-    asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
-    return
+        # 自動削除（チャンネル削除）
+        asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
+        return
 
+    # まだ続くなら、固定メッセージを「次の質問Embed」に更新
+    await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
 
 # ===== イベント =====
 @bot.event
@@ -514,6 +509,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
