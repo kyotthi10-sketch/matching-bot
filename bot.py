@@ -65,9 +65,28 @@ def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
     )
 from collections import defaultdict, Counter
 
+# ===== 共通関数 =====
 # 5段階：A=0, B=25, C=50, D=75, E=100
 SCALE = {"A": 0, "B": 25, "C": 50, "D": 75, "E": 100}
 VALID_ANS = set(SCALE.keys())
+STAR_MAP = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5}
+
+def stars(letter: str) -> str:
+    n = STAR_MAP.get(letter, 3)
+    return "★" * n + "☆" * (5 - n)
+
+def progress_bar(current: int, total: int, width: int = 10) -> str:
+    if total <= 0:
+        return ""
+    filled = int(round((current / total) * width))
+    filled = max(0, min(width, filled))
+    return "■" * filled + "□" * (width - filled)
+
+def progress_text(idx: int, total: int) -> str:
+    # idx は 0始まり。表示は 1/total
+    now = min(idx + 1, total)
+    bar = progress_bar(now, total, width=12)
+    return f"[{bar}] {now}/{total}"
 
 def build_profile(user_id: int):
     """
@@ -138,7 +157,8 @@ def categorized_result(user_id: int) -> str:
         if cat in picks:
             shown += 1
             pct = meters.get(cat, 50)
-            lines.append(f"{LABEL.get(cat, cat)}：{TEXT.get(cat, {}).get(picks[cat], picks[cat])}（{pct}%）")
+          　lines.append(f"{LABEL.get(cat, cat)}：{TEXT.get(cat, {}).get(picks[cat], picks[cat])}  {stars(picks[cat])}")
+
 
     # 「相性％」は /match で相手と比較して出すのが自然なので
     # ここでは “あなたの指標” を％で必ず見せる（要求①）
@@ -176,8 +196,9 @@ async def send_question_to_channel(channel: discord.TextChannel, user_id: int, i
     order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
     qid = order[idx]
     q = q_by_id(qid)
-    view = AnswerView(user_id, idx, order)  # idxは「順番の何番目か」
-    await channel.send(f"Q{idx+1}. {q['text']}", view=view)
+
+    header = progress_text(idx, len(order))
+    await channel.send(f"{header}\nQ{idx+1}. {q['text']}", view=AnswerView(user_id, idx, order))
 
 
 # ===== ボタンUI =====
@@ -189,8 +210,9 @@ class AnswerView(discord.ui.View):
         self.order = order
 
         q = q_by_id(order[idx])
-        for key, label in q["choices"]:
-            self.add_item(AnswerButton(user_id, idx, order, key, label))
+     　 for key, label in q["choices"]:
+    self.add_item(AnswerButton(user_id, idx, order, key, f"{stars(key)} {label}"))
+
 
 class AnswerButton(discord.ui.Button):
     def __init__(self, user_id: int, idx: int, order: list[int], key: str, label: str):
@@ -220,11 +242,14 @@ class AnswerButton(discord.ui.Button):
         if next_idx >= len(self.order):
             msg = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
             await interaction.response.edit_message(content=msg, view=None)
-        else:
-            nq = q_by_id(self.order[next_idx])
-            await interaction.response.edit_message(
-                content=f"Q{next_idx + 1}. {nq['text']}",
-                view=AnswerView(self.user_id, next_idx, self.order)
+       else:
+    nq = q_by_id(self.order[next_idx])
+    header = progress_text(next_idx, len(self.order))
+    await interaction.response.edit_message(
+        content=f"{header}\nQ{next_idx + 1}. {nq['text']}",
+        view=AnswerView(self.user_id, next_idx, self.order)
+    )
+
             )
 
         # 最終質問
@@ -403,6 +428,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
