@@ -119,7 +119,7 @@ def progress_bar(current: int, total: int, width: int = 10) -> str:
 
 def build_question_embed(idx: int, total: int, q: dict) -> discord.Embed:
     embed = discord.Embed(
-        title="🎮 診断（ゲーム × リアル）",
+        title="🎮 ロール診断",
         color=discord.Color.blue()
     )
 
@@ -783,6 +783,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
