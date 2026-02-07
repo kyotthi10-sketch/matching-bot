@@ -511,14 +511,23 @@ async def create_or_open_room(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     print("commands:", [c.name for c in bot.tree.get_commands()])
-
+    global _synced_once
     init_db()
     try:
         bot.add_view(StartRoomView())
     except Exception as e:
         print("add_view failed:", repr(e))
 
+    if not _synced_once:
+        _synced_once = True
+        try:
+            await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+            print("✅ synced on_ready")
+        except Exception as e:
+            print("⚠️ sync failed:", repr(e))
+
     print(f"Bot起動: {bot.user}")
+
 
 @bot.event
 async def on_member_join(member: discord.Member):
@@ -629,12 +638,11 @@ async def create_or_open_room(interaction: discord.Interaction):
 
 # ===== コマンド =====
 
-    @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
-    async def room(interaction: discord.Interaction):
-        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
-        return
-
+@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
+async def room(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+    return
     guild = interaction.guild
     member: discord.Member = interaction.user
     user_id = member.id
@@ -847,6 +855,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
