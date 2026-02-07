@@ -413,6 +413,7 @@ class AnswerButton(discord.ui.Button):
         self.idx = idx
         self.order = order
         self.key = key
+
 class StartRoomView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -458,28 +459,26 @@ async def create_or_open_room(interaction: discord.Interaction):
     await upsert_question_message(ch, user_id, 0, order)
 
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
+   
+    async def callback(self, interaction: discord.Interaction):
+    # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
 
-async def callback(self, interaction: discord.Interaction):
-    # 他人の操作は即返す
+    # 他人の操作は followup で返す（responseはもう使わない）
     if interaction.user.id != self.user_id:
-        await interaction.response.send_message(
-            "これはあなたの診断ではありません。",
-            ephemeral=True
-        )
+        await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
         return
 
-    # 3秒制限回避：最初に必ずACK
-    await interaction.response.defer(ephemeral=True)
-
     try:
-        # --- 回答保存 ---
+        # --- 回答保存（sqlite等はブロックするので別スレッド） ---
         q = q_by_id(self.order[self.idx])
         await asyncio.to_thread(save_answer, self.user_id, q["id"], self.key)
 
         next_idx = self.idx + 1
-        set_state(self.user_id, next_idx)
+        await asyncio.to_thread(set_state, self.user_id, next_idx)
 
-        # --- 診断完了 ---
+        # --- 完了 ---
         if next_idx >= len(self.order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
 
@@ -498,26 +497,18 @@ async def callback(self, interaction: discord.Interaction):
             else:
                 await interaction.followup.send(result_text + notice, ephemeral=True)
 
-            # 自動削除開始
-            asyncio.create_task(
-                schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS)
-            )
+            asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
             return
 
-        # --- 次の質問へ ---
-        await upsert_question_message(
-            interaction.channel,
-            self.user_id,
-            next_idx,
-            self.order
-        )
+        # --- 次の質問へ（固定メッセージを更新） ---
+        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
 
     except Exception as e:
-        await interaction.followup.send(
-            f"⚠️ エラーが発生しました：{type(e).__name__}",
-            ephemeral=True
-        )
+        await interaction.followup.send(f"⚠️ エラー：{type(e).__name__}", ephemeral=True)
         raise
+
+
+
 
 
 # ===== イベント =====
@@ -793,6 +784,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
