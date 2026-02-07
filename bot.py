@@ -461,16 +461,13 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
    
     async def callback(self, interaction: discord.Interaction):
-        print("BUTTON CLICK", self.user_id, self.idx, self.key)
-
-    # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
-    if not interaction.response.is_done():
-    await interaction.response.defer(ephemeral=True)
-
-    # 他人の操作は followup で返す（responseはもう使わない）
-    if interaction.user.id != self.user_id:
-        await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
-        return
+        # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+            # 他人の操作は followup で返す（responseはもう使わない）
+        if interaction.user.id != self.user_id:
+            await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
+            return
 
     try:
         # --- 回答保存（sqlite等はブロックするので別スレッド） ---
@@ -786,6 +783,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
