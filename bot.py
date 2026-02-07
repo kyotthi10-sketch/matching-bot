@@ -321,39 +321,54 @@ async def close(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
-@bot.tree.command(name="stats", description="管理者用：利用状況を表示", guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(name="stats", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
 async def stats(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-      # ✅ 管理者チャンネル限定
-if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
-  　　  await interaction.response.send_message("このコマンドは管理者チャンネルでのみ使用できます。", ephemeral=True)
-    return
-      # ✅ 管理者ロール限定
-    if not has_admin_role(interaction.user):
-        await interaction.response.send_message("権限がありません（管理者ロールが必要です）。", ephemeral=True)
+
+    # ✅ 管理者チャンネル限定
+    if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
+        await interaction.response.send_message(
+            "このコマンドは管理者チャンネルでのみ使用できます。",
+            ephemeral=True
+        )
         return
-        
+
+    # ✅ 管理者ロール限定
+    if not has_admin_role(interaction.user):
+        await interaction.response.send_message(
+            f"権限がありません（`{ADMIN_ROLE_NAME}` ロールが必要です）。",
+            ephemeral=True
+        )
+        return
+
     total = count_total_users()
     completed = count_completed_users(len(QUESTIONS))
     inprogress = count_inprogress_users(len(QUESTIONS))
-
-    # 専用ルーム数（サーバー内の match-xxx を数える）
     rooms = [ch for ch in interaction.guild.text_channels if ch.name.startswith("match-")]
 
-    msg = (
-        "📊 **診断Bot 利用状況**\n\n"
-        f"・総ユーザー数：{total}\n"
-        f"・診断完了：{completed}\n"
-        f"・診断途中：{inprogress}\n"
-        f"・現在の専用ルーム数：{len(rooms)}\n\n"
-        f"管理者ロール：`{ADMIN_ROLE_NAME}`"
+    # Embed作成
+    embed = discord.Embed(
+        title="📊 診断Bot 利用状況",
+        description="管理者向けの集計情報です。",
     )
-    await interaction.response.send_message(msg, ephemeral=True)
+    embed.add_field(name="総ユーザー数", value=str(total), inline=True)
+    embed.add_field(name="診断完了", value=str(completed), inline=True)
+    embed.add_field(name="診断途中", value=str(inprogress), inline=True)
+    embed.add_field(name="専用ルーム数", value=str(len(rooms)), inline=True)
+
+    embed.add_field(name="質問数", value=str(len(QUESTIONS)), inline=True)
+    embed.add_field(name="管理者ロール", value=f"`{ADMIN_ROLE_NAME}`", inline=True)
+
+    # どのチャンネルで実行されたか等（任意）
+    embed.set_footer(text=f"Requested by {interaction.user.display_name}")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 bot.run(TOKEN)
+
 
 
 
