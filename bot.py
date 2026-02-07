@@ -384,15 +384,16 @@ async def room(interaction: discord.Interaction):
     )
 
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
-    await ch.send("📝 このルームは診断専用です。ボタンで回答してください。")
-    
+
+    # 初期化
     reset_user(user_id)
     reset_order(user_id)
     reset_message_id(user_id)
 
+    # 出題順を作って、固定メッセージ（Embed）で開始
+    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+    await upsert_question_message(ch, user_id, 0, order)
 
-order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
-await upsert_question_message(ch, user_id, 0, order)
 
 
 @bot.tree.command(name="start", description="診断開始", guild=discord.Object(id=GUILD_ID))
@@ -510,6 +511,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
