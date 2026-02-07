@@ -560,7 +560,7 @@ async def on_member_join(member: discord.Member):
         return
 
     # ✅ 3秒制限回避：即ACK
-      if not interaction.response.is_done():
+    if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
       try:
@@ -887,6 +887,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
