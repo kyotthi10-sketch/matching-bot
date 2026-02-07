@@ -1,8 +1,8 @@
 import os
 import asyncio
 import discord
-from discord.ext import commands
 _synced_once = False
+from discord.ext import commands
 
 from questions import QUESTIONS
 from db import (
@@ -872,6 +872,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
