@@ -174,6 +174,49 @@ def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) ->
     # 0〜100pt
     return int(round(same / len(usable) * 100))
 
+async def create_or_open_room_for_member(guild: discord.Guild, member: discord.Member):
+    user_id = member.id
+    channel_name = f"match-{user_id}"
+
+    # 既存ルームがあれば案内だけ
+    for ch in guild.text_channels:
+        if is_user_room(ch, user_id):
+            try:
+                await member.send(f"✅ 既に専用ルームがあります：{ch.mention}")
+            except Exception:
+                pass
+            return ch
+
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
+        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+    }
+
+    ch = await guild.create_text_channel(
+        channel_name,
+        topic=f"user:{user_id}",
+        overwrites=overwrites
+    )
+
+    # 初期化
+    reset_user(user_id)
+    reset_order(user_id)
+    reset_message_id(user_id)
+
+    # 出題順 → 1つの固定メッセージ（Embed）で開始
+    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+    await upsert_question_message(ch, user_id, 0, order)
+
+    # 本人にDMで案内（DM拒否されてたら無視）
+    try:
+        await member.send(f"🎮 診断ルームを作成しました：{ch.mention}")
+    except Exception:
+        pass
+
+    return ch
+
+
 # ===== 診断結果（カテゴライズ）=====
 def categorized_result(user_id: int) -> str:
     picks, meters = build_profile(user_id)
@@ -419,6 +462,17 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member: discord.Member):
+    # Botが入ってきた時は無視
+    if member.bot:
+        return
+
+    await create_or_open_room_for_member(member.guild, member)
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    if member.bot:
+        return
+    await create_or_open_room_for_member(member.guild, member)
     channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
     if channel is None:
         return
@@ -664,6 +718,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
