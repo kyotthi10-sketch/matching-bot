@@ -1,5 +1,6 @@
 import sqlite3
 from typing import List, Tuple
+from db import get_message_id, set_message_id, reset_message_id
 
 DB_PATH = "app.db"
 
@@ -27,6 +28,13 @@ def init_db() -> None:
             order_json TEXT NOT NULL
         )
         """)
+        cur.execute("""
+　　　　 CREATE TABLE IF NOT EXISTS user_msg (
+        user_id INTEGER PRIMARY KEY,
+        message_id INTEGER NOT NULL
+        )
+        """)
+
 
 def get_state(user_id: int) -> int:
     with sqlite3.connect(DB_PATH) as con:
@@ -122,4 +130,26 @@ def reset_order(user_id: int) -> None:
         cur = con.cursor()
         cur.execute("DELETE FROM question_order WHERE user_id=?", (user_id,))
         con.commit()
+def get_message_id(user_id: int) -> int | None:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("SELECT message_id FROM user_msg WHERE user_id=?", (user_id,))
+        row = cur.fetchone()
+        return int(row[0]) if row else None
+
+def set_message_id(user_id: int, message_id: int) -> None:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("""
+        INSERT INTO user_msg(user_id, message_id) VALUES(?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET message_id=excluded.message_id
+        """, (user_id, message_id))
+        con.commit()
+
+def reset_message_id(user_id: int) -> None:
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("DELETE FROM user_msg WHERE user_id=?", (user_id,))
+        con.commit()
+
 
