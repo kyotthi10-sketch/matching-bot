@@ -83,7 +83,7 @@ def reset_user(user_id: int) -> None:
         con.commit()
 import sqlite3
 
-DB_PATH = "app.db"  # 既にある場合は不要
+DB_PATH = "app.db"
 
 def count_total_users() -> int:
     with sqlite3.connect(DB_PATH) as con:
