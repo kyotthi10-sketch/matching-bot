@@ -550,6 +550,21 @@ async def close(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
+# ===== 管理者用 =====
+@bot.tree.command(name="sync", description="コマンドを同期（管理者用）", guild=discord.Object(id=GUILD_ID))
+async def sync_cmd(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("管理者のみ実行できます。", ephemeral=True)
+        return
+
+    guild = discord.Object(id=GUILD_ID)
+    await bot.tree.sync(guild=guild)
+    await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
+
+
 @bot.tree.command(name="logs", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
 async def logs(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
@@ -597,6 +612,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
