@@ -99,9 +99,7 @@ def count_inprogress_users(total_questions: int) -> int:
 # ===== 共通判定 =====
 def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
     return isinstance(channel, discord.TextChannel) and (channel.topic or "").startswith(f"user:{user_id}")
-     and channel.topic == f"user:{user_id}"
-    )
-from collections import defaultdict, Counter
+    from collections import defaultdict, Counter
 
 # ===== 共通関数 =====
 async def post_panel(channel: discord.TextChannel):
@@ -849,6 +847,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
