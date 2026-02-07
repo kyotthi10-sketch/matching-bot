@@ -393,7 +393,7 @@ async def send_question_to_channel(channel: discord.TextChannel, user_id: int, i
 # ===== ボタンUI =====
 class AnswerView(discord.ui.View):
     def __init__(self, user_id: int, idx: int, order: list[int]):
-        super().__init__(timeout=180)
+        super().__init__(timeout=None)
         self.user_id = user_id
         self.idx = idx
         self.order = order
@@ -460,14 +460,18 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
 
 async def callback(self, interaction: discord.Interaction):
-    # 他人の操作は即返す（この場合だけ response.send_message でOK）
+   # 他人の操作は即返す
     if interaction.user.id != self.user_id:
-        await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
-        return
+      await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
+      return
 
-    # 3秒制限対策：最初に必ずdefer（これで「インタラクションに失敗」激減）
-    if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
+  # ✅ 3秒制限回避：最初に必ずACK
+    await interaction.response.defer(ephemeral=True)
+
+  # ✅ 重い処理は別スレッドへ（sqliteなど）
+     q = q_by_id(self.order[self.idx])
+    await asyncio.to_thread(save_answer, self.user_id, q["id"], self.key)
+
 
     try:
         # --- 回答保存 ---
@@ -789,6 +793,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
