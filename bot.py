@@ -551,19 +551,19 @@ async def on_member_join(member: discord.Member):
     @bot.event
     async def on_interaction(interaction: discord.Interaction):
     # ボタン以外は無視
-    if interaction.type != discord.InteractionType.component:
+      if interaction.type != discord.InteractionType.component:
         return
 
     data = interaction.data or {}
     cid = data.get("custom_id", "")
-    if not isinstance(cid, str) or not cid.startswith("ans:"):
+      if not isinstance(cid, str) or not cid.startswith("ans:"):
         return
 
     # ✅ 3秒制限回避：即ACK
-    if not interaction.response.is_done():
+      if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
-    try:
+      try:
         # ans:{user_id}:{idx}:{key}
         _, uid_s, idx_s, key = cid.split(":")
         user_id = int(uid_s)
@@ -887,6 +887,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
