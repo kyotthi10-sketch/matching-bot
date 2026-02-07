@@ -4,6 +4,17 @@ from typing import List, Tuple
 DB_PATH = "app.db"
 
 def init_db():
+    # answers の不足列を補完（過去DB対策）
+    _add_column_if_missing(cur, "answers", "question_id", "INTEGER")
+    _add_column_if_missing(cur, "answers", "answer", "TEXT")
+    
+def _add_column_if_missing(cur, table: str, col: str, coldef: str):
+    cur.execute(f"PRAGMA table_info({table})")
+    cols = [r[1] for r in cur.fetchall()]
+    if col not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coldef}")
+
+
     with sqlite3.connect(DB_PATH) as con:
         cur = con.cursor()
 
@@ -155,5 +166,8 @@ def reset_message_id(user_id: int) -> None:
         cur = con.cursor()
         cur.execute("DELETE FROM user_msg WHERE user_id=?", (user_id,))
         con.commit()
+        
+        debug_schema()
+
 
 
