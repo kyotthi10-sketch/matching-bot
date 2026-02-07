@@ -17,9 +17,10 @@ from collections import defaultdict, Counter
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
-BOTADMIN_ROLE_NAME = os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467")
-ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_ID", "1469624897587118081")
+BOTADMIN_ROLE_ID = os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467")
+ADMIN_ROLE_ID = os.environ.get("ADMIN_ROLE_ID", "1469624897587118081")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
+WELCOME_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
 CATEGORY_LABEL = {
     "game_style": "ゲーム志向",
     "communication": "コミュニケーション",
@@ -414,6 +415,19 @@ async def on_ready():
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
     print(f"Bot起動: {bot.user}")
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
+    if channel is None:
+        return
+
+    # メンバー歓迎（任意）
+    await channel.send(f"👋 {member.mention} さん、ようこそ！ボタンを押して診断スタート")
+
+    # 診断パネルを自動設置
+    await post_panel(channel)
+
     
 # ===== ボタンで開始 =====   
 async def create_or_open_room(interaction: discord.Interaction):
@@ -649,6 +663,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
