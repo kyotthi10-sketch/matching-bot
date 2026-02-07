@@ -628,7 +628,7 @@ async def close(interaction: discord.Interaction):
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
 # ===== 管理者用 =====
-@bot.tree.command(name="ping", description="動作確認（指定ロール専用）")
+@bot.tree.command(name="ping", description="動作確認（運営専用）")
 async def ping(interaction: discord.Interaction):
 
     # ロールチェック
@@ -718,6 +718,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
