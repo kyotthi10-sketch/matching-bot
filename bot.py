@@ -24,6 +24,17 @@ async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, secon
         await channel.delete(reason=f"Auto close (user:{user_id})")
     except Exception:
         pass
+import re
+
+def safe_channel_name(name: str) -> str:
+    # 小文字化
+    name = name.lower()
+    # 英数字以外を - に変換
+    name = re.sub(r"[^a-z0-9]", "-", name)
+    # - が連続したら1つに
+    name = re.sub(r"-+", "-", name)
+    # 前後の - を削除
+    return name.strip("-") or "user"
 
 
 # ===== 環境変数 =====
@@ -628,9 +639,10 @@ async def create_or_open_room(interaction: discord.Interaction):
 @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
 async def room(interaction: discord.Interaction):
     guild = interaction.guild
-    user_id = interaction.user.id
-    channel_name = f"match-{user_id}"
-
+    user_id = interaction.member.id
+    safe_name = safe_channel_name(member.display_name)
+    channel_name = f"match-{safe_name}"
+    
     # 既存ルーム再利用
     for ch in guild.text_channels:
         if is_user_room(ch, user_id):
@@ -827,6 +839,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
