@@ -23,6 +23,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ===== 共通変数 =====
 def has_admin_role(member: discord.Member) -> bool:
     return any(r.name == ADMIN_ROLE_NAME for r in member.roles)
+def compatibility_percent(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
+    usable = [c for c in categories if c in picks_a and c in picks_b]
+    if not usable:
+        return 0
+    same = sum(1 for c in usable if picks_a[c] == picks_b[c])
+    return int(round(same / len(usable) * 100))
+
+def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
+    # A案：0〜100pt（％と同じスケール）
+    return compatibility_percent(picks_a, picks_b, categories)
+
 
 # ===== 集計変数 =====
 def count_total_users() -> int:
@@ -250,6 +261,57 @@ async def start(interaction: discord.Interaction):
     idx = get_state(interaction.user.id)
     await send_question_to_channel(interaction.channel, interaction.user.id, idx)
 
+@bot.tree.command(name="match", description="相性TOP3（任意表示）", guild=discord.Object(id=GUILD_ID))
+async def match(interaction: discord.Interaction):
+    # 専用ルーム以外は拒否（あなたの方針）
+    if not is_user_room(interaction.channel, interaction.user.id):
+        await interaction.response.send_message("専用ルーム内で実行してください。", ephemeral=True)
+        return
+
+    # 診断完了してないなら拒否
+    if get_state(interaction.user.id) < len(QUESTIONS):
+        await interaction.response.send_message("診断が完了していません。先に質問に回答してください。", ephemeral=True)
+        return
+
+    me_picks, _ = build_profile(interaction.user.id)
+
+    # 比較するカテゴリ（結果表示と同じにする）
+    CATS = ["game_style", "communication", "real_priority", "distance", "money", "play_time", "future"]
+
+    # 全ユーザー候補（answersテーブルから拾う：参加者のみ）
+    # ※ db.pyの追加なしで動く簡易版
+    import sqlite3
+    from db import DB_PATH  # db.pyにDB_PATHがある前提（無ければ追記が必要）
+
+    with sqlite3.connect(DB_PATH) as con:
+        cur = con.cursor()
+        cur.execute("SELECT DISTINCT user_id FROM answers")
+        user_ids = [int(r[0]) for r in cur.fetchall()]
+
+    results = []
+    for uid in user_ids:
+        if uid == interaction.user.id:
+            continue
+        if get_state(uid) < len(QUESTIONS):  # 未完了は除外
+            continue
+        other_picks, _ = build_profile(uid)
+        pct = compatibility_percent(me_picks, other_picks, CATS)
+        results.append((pct, uid))
+
+    if not results:
+        await interaction.response.send_message("比較できる相手がまだいません。", ephemeral=True)
+        return
+
+    results.sort(reverse=True, key=lambda x: x[0])
+    top = results[:3]
+
+    lines = ["🏆 **相性TOP3（カテゴリ一致率）**"]
+    for i, (pct, uid) in enumerate(top, start=1):
+        lines.append(f"{i}位：<@{uid}>  **{pct}%**")
+
+    await interaction.response.send_message("\n".join(lines))
+
+
 @bot.tree.command(name="close", description="自分の診断ルームを削除", guild=discord.Object(id=GUILD_ID))
 async def close(interaction: discord.Interaction):
     if is_user_room(interaction.channel, interaction.user.id):
@@ -288,4 +350,5 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
