@@ -326,7 +326,7 @@ async def stats(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-　　　# ✅ 管理者チャンネル限定
+      # ✅ 管理者チャンネル限定
 if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
   　　  await interaction.response.send_message("このコマンドは管理者チャンネルでのみ使用できます。", ephemeral=True)
     return
@@ -354,6 +354,7 @@ if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
 
 
 bot.run(TOKEN)
+
 
 
 
