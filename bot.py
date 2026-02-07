@@ -549,7 +549,7 @@ async def on_member_join(member: discord.Member):
     await post_panel(channel)
     
     @bot.event
-async def on_interaction(interaction: discord.Interaction):
+    async def on_interaction(interaction: discord.Interaction):
     # ボタン以外は無視
     if interaction.type != discord.InteractionType.component:
         return
@@ -887,6 +887,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
