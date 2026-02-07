@@ -464,7 +464,7 @@ async def create_or_open_room(interaction: discord.Interaction):
         print("BUTTON CLICK", self.user_id, self.idx, self.key)
 
     # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
-       if not interaction.response.is_done():
+    if not interaction.response.is_done():
     await interaction.response.defer(ephemeral=True)
 
     # 他人の操作は followup で返す（responseはもう使わない）
@@ -786,6 +786,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
