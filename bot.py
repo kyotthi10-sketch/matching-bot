@@ -551,12 +551,13 @@ async def close(interaction: discord.Interaction):
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
 # ===== 管理者用 =====
-@bot.tree.command(name="ping", description="動作確認（管理者用）")
+@bot.tree.command(name="ping", description="動作確認（指定ロール専用）")
 async def ping(interaction: discord.Interaction):
-    # 管理者チェック
-    if not interaction.user.guild_permissions.administrator:
+
+    # ロールチェック
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
         await interaction.response.send_message(
-            "このコマンドは管理者専用です。",
+            "このコマンドは運営専用です。",
             ephemeral=True
         )
         return
@@ -568,8 +569,11 @@ async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("管理者のみ実行できます。", ephemeral=True)
+   # ロールチェック
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message("このコマンドは運営専用です。",
+            ephemeral=True
+        )
         return
 
     guild = discord.Object(id=GUILD_ID)
@@ -583,9 +587,9 @@ async def sync_cmd(interaction: discord.Interaction):
 )
 async def panel(interaction: discord.Interaction):
 
-    # 管理者チェックだけ残す
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("管理者のみ実行できます。", ephemeral=True)
+    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message("このコマンドは運営専用です。",ephemeral=True
+        )
         return
 
     embed = discord.Embed(
@@ -645,6 +649,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
