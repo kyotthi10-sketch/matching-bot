@@ -564,21 +564,26 @@ async def sync_cmd(interaction: discord.Interaction):
     await bot.tree.sync(guild=guild)
     await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
 
-@bot.tree.command(name="panel", description="診断開始ボタンを設置（管理者用）", guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(
+    name="panel",
+    description="診断開始ボタンを設置（管理者用）",
+    guild=discord.Object(id=GUILD_ID)
+)
 async def panel(interaction: discord.Interaction):
-    if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
-        await interaction.response.send_message("管理者チャンネルで実行してください。", ephemeral=True)
-        return
-    if not has_admin_role(interaction.user):
-        await interaction.response.send_message("権限がありません。", ephemeral=True)
+
+    # 管理者チェックだけ残す
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("管理者のみ実行できます。", ephemeral=True)
         return
 
     embed = discord.Embed(
         title="🎮 診断スタート",
         description="下のボタンを押すと、あなた専用の診断ルームが作成されます。",
     )
-    await interaction.response.send_message("設置しました。", ephemeral=True)
+
+    await interaction.response.send_message("✅ 設置しました。", ephemeral=True)
     await interaction.channel.send(embed=embed, view=StartRoomView())
+
 
 
 @bot.tree.command(name="logs", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
@@ -628,6 +633,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
