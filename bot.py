@@ -556,7 +556,7 @@ async def on_member_join(member: discord.Member):
 
     data = interaction.data or {}
     cid = data.get("custom_id", "")
-      if not isinstance(cid, str) or not cid.startswith("ans:"):
+    if not isinstance(cid, str) or not cid.startswith("ans:"):
         return
 
     # ✅ 3秒制限回避：即ACK
@@ -887,6 +887,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
