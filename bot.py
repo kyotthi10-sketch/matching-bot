@@ -20,7 +20,7 @@ AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 BOTADMIN_ROLE_ID = os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467")
 ADMIN_ROLE_ID = os.environ.get("ADMIN_ROLE_ID", "1469624897587118081")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
-WELCOME_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
+WELCOME_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1466960571688550537"))
 CATEGORY_LABEL = {
     "game_style": "ゲーム志向",
     "communication": "コミュニケーション",
@@ -718,6 +718,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
