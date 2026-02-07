@@ -549,10 +549,10 @@ async def on_member_join(member: discord.Member):
     await post_panel(channel)
     
     @bot.event
-    async def on_interaction(interaction: discord.Interaction):
-    # ボタン以外は無視（slash等はdiscord.pyが処理する）
-        if interaction.type != discord.InteractionType.component:
-            return
+async def on_interaction(interaction: discord.Interaction):
+    # ボタン以外は無視
+    if interaction.type != discord.InteractionType.component:
+        return
 
     data = interaction.data or {}
     cid = data.get("custom_id", "")
@@ -560,36 +560,43 @@ async def on_member_join(member: discord.Member):
         return
 
     # ✅ 3秒制限回避：即ACK
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-            
-            try:
-                # ans:{user_id}:{idx}:{key}
-                _, uid_s, idx_s, key = cid.split(":")
-                user_id = int(uid_s)
-                idx = int(idx_s)
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
+    try:
+        # ans:{user_id}:{idx}:{key}
+        _, uid_s, idx_s, key = cid.split(":")
+        user_id = int(uid_s)
+        idx = int(idx_s)
 
         # 他人操作拒否
         if interaction.user.id != user_id:
-                await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
-                return
-                
-        # order取得（あなたの既存関数に合わせる）
-        order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
-        
-        # idxがズレていたら現在stateを優先して補正（事故防止）
+            await interaction.followup.send(
+                "これはあなたの診断ではありません。",
+                ephemeral=True
+            )
+            return
+
+        # order取得
+        order = await asyncio.to_thread(
+            get_or_create_order,
+            user_id,
+            [q["id"] for q in QUESTIONS]
+        )
+
+        # state補正
         cur_idx = await asyncio.to_thread(get_state, user_id)
         if isinstance(cur_idx, int) and 0 <= cur_idx < len(order):
             idx = cur_idx
-            
-        # 保存（sqliteはブロックするのでto_thread）
+
+        # 保存（DBは別スレッド）
         q = q_by_id(order[idx])
         await asyncio.to_thread(save_answer, user_id, q["id"], key)
 
         next_idx = idx + 1
         await asyncio.to_thread(set_state, user_id, next_idx)
 
-        # 完了
+        # --- 完了 ---
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
             notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
@@ -603,18 +610,39 @@ async def on_member_join(member: discord.Member):
                     msg = None
 
             if msg:
-                await msg.edit(content=result_text + notice, embed=None, view=None)
+                await msg.edit(
+                    content=result_text + notice,
+                    embed=None,
+                    view=None
+                )
             else:
-                await interaction.followup.send(result_text + notice, ephemeral=True)
+                await interaction.followup.send(
+                    result_text + notice,
+                    ephemeral=True
+                )
 
-            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+            asyncio.create_task(
+                schedule_auto_delete(
+                    interaction.channel,
+                    user_id,
+                    AUTO_CLOSE_SECONDS
+                )
+            )
             return
 
-        # 次の質問へ（固定メッセージ更新）
-        await upsert_question_message(interaction.channel, user_id, next_idx, order)
+        # --- 次の質問 ---
+        await upsert_question_message(
+            interaction.channel,
+            user_id,
+            next_idx,
+            order
+        )
 
     except Exception as e:
-        await interaction.followup.send(f"⚠️ エラー：{type(e).__name__}", ephemeral=True)
+        await interaction.followup.send(
+            f"⚠️ エラー：{type(e).__name__}",
+            ephemeral=True
+        )
         raise
 
 
@@ -859,6 +887,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
