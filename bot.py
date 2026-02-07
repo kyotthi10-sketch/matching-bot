@@ -17,19 +17,19 @@ from collections import defaultdict, Counter
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
-BOTADMIN_ROLE_ID = os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467")
-ADMIN_ROLE_ID = os.environ.get("ADMIN_ROLE_ID", "1469624897587118081")
+BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
 WELCOME_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1466960571688550537"))
 CATEGORY_LABEL = {
-    "game_style": "ゲーム志向",
+    "game_style": "ゲームスタイル",
     "communication": "コミュニケーション",
-    "real_priority": "リアル優先度",
+    "play_time": "プレイ時間・生活",
     "distance": "距離感",
     "money": "お金・課金感覚",
-    "play_time": "プレイ頻度",
-    "future": "将来観",
+    "future": "将来観・価値観",
 }
+
 
 
 intents = discord.Intents.default()
@@ -219,46 +219,94 @@ async def create_or_open_room_for_member(guild: discord.Guild, member: discord.M
 
 # ===== 診断結果（カテゴライズ）=====
 def categorized_result(user_id: int) -> str:
+    """
+    30問 / 6カテゴリ / 5段階（A〜E）
+    - 各カテゴリ：文章 + ★表示
+    """
     picks, meters = build_profile(user_id)
+    # picks : {"game_style": "D", ...}
+    # meters: {"game_style": 4.2, ...}  # 1.0〜5.0 の平均想定
 
-    # 表示したいカテゴリ（あなたの questions.py の category 名に合わせて）
-    # ここに無いカテゴリは表示されません（増やしたらここに追加）
-    CATS = ["game_style", "communication", "real_priority", "distance", "money", "play_time", "future"]
+    # 表示するカテゴリ（30問構成）
+    CATS = [
+        "game_style",
+        "communication",
+        "play_time",
+        "distance",
+        "money",
+        "future",
+    ]
 
     # 日本語ラベル
     LABEL = {
-        "game_style": "🎮 ゲーム志向",
+        "game_style": "🎮 ゲームスタイル",
         "communication": "💬 コミュニケーション",
-        "real_priority": "🏠 リアル優先度",
+        "play_time": "🕒 プレイ時間・生活",
         "distance": "🧍 距離感",
-        "money": "💰 お金/課金感覚",
-        "play_time": "🕒 プレイ頻度/時間帯",
-        "future": "🧭 将来観",
+        "money": "💰 お金・課金感覚",
+        "future": "🧭 将来観・価値観",
     }
 
-    # A/B/Cの意味（カテゴリごとに微調整したい場合はここをいじる）
+    # 5段階（A〜E）の意味づけ（カテゴリ別）
     TEXT = {
-        "game_style": {"A":"エンジョイ寄り", "B":"バランス", "C":"ガチ志向"},
-        "communication": {"A":"テキスト派", "B":"状況次第", "C":"VC重視"},
-        "real_priority": {"A":"リアル優先", "B":"両立型", "C":"ゲームも重視"},
-        "distance": {"A":"自立距離", "B":"バランス", "C":"密接"},
-        "money": {"A":"堅実派", "B":"バランス", "C":"体験/課金OK"},
-        "play_time": {"A":"控えめ", "B":"中くらい", "C":"多め"},
-        "future": {"A":"自然に", "B":"早めに相談", "C":"最初から擦り合わせ"},
+        "game_style": {
+            "A": "エンジョイ重視で気楽に楽しむ",
+            "B": "楽しさと勝敗のバランス型",
+            "C": "状況次第で本気も出す",
+            "D": "勝ちや成長をしっかり求める",
+            "E": "かなりガチ志向で突き詰める",
+        },
+        "communication": {
+            "A": "必要最低限・テキスト中心",
+            "B": "落ち着いたやり取りが好み",
+            "C": "相手に合わせる柔軟タイプ",
+            "D": "積極的に会話・連携したい",
+            "E": "VCや雑談をかなり重視",
+        },
+        "play_time": {
+            "A": "かなり控えめ・不定期",
+            "B": "空いた時間にほどほど",
+            "C": "無理のない安定ペース",
+            "D": "定期的にしっかり遊ぶ",
+            "E": "時間を作ってでも遊ぶ",
+        },
+        "distance": {
+            "A": "干渉少なめ・自立重視",
+            "B": "必要な時だけ関わりたい",
+            "C": "心地よい距離感を保つ",
+            "D": "一緒に過ごす時間を重視",
+            "E": "密な関係・頻繁な交流が理想",
+        },
+        "money": {
+            "A": "無課金・超堅実派",
+            "B": "基本は節約・慎重",
+            "C": "必要なら使うバランス型",
+            "D": "体験向上なら課金OK",
+            "E": "趣味への投資は惜しまない",
+        },
+        "future": {
+            "A": "流れに任せたい",
+            "B": "深く考えすぎない",
+            "C": "タイミングを見て考える",
+            "D": "早めに方向性を共有したい",
+            "E": "最初から価値観を重視",
+        },
     }
 
     lines = []
-    shown = 0
     for cat in CATS:
-        if cat in picks:
-            shown += 1
-            pct = meters.get(cat, 50)
-            lines.append(
-                f"{LABEL.get(cat, cat)}："
-                f"{TEXT.get(cat, {}).get(picks[cat], picks[cat])}  "
-                f"{stars(picks[cat])}"
-            )
+        if cat not in picks:
+            continue
 
+        letter = picks[cat]          # A〜E
+        desc = TEXT[cat].get(letter, letter)
+        star = stars(letter)         # ★☆☆☆☆ 表示
+
+        lines.append(
+            f"{LABEL.get(cat, cat)}：{desc}\n{star}"
+        )
+
+    return "\n\n".join(lines)
 
 
     # 「相性％」は /match で相手と比較して出すのが自然なので
@@ -646,9 +694,11 @@ async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-   # ロールチェック
+
+       # ロールチェック
     if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message("このコマンドは運営専用です。",
+        await interaction.response.send_message(
+            "このコマンドは運営専用です。",
             ephemeral=True
         )
         return
@@ -657,12 +707,16 @@ async def sync_cmd(interaction: discord.Interaction):
     await bot.tree.sync(guild=guild)
     await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
 
+
 @bot.tree.command(name="panel", description="診断開始ボタンを設置（指定ロール専用）")
 async def panel(interaction: discord.Interaction):
 
-    # 指定ロール制限（すでに入れている想定）
-    if not has_role(interaction.user, BOTADMIN_ROLE_ID):
-        await interaction.response.send_message("権限がありません。", ephemeral=True)
+    # ロールチェック
+    if not any(role.id == BOTADMIN_ROLE_ID for role in interaction.user.roles):
+        await interaction.response.send_message(
+            "このコマンドは運営専用です。",
+            ephemeral=True
+        )
         return
 
     await post_panel(interaction.channel)
@@ -688,7 +742,7 @@ async def logs(interaction: discord.Interaction):
     # ✅ 管理者ロール限定
     if not has_admin_role(interaction.user):
         await interaction.response.send_message(
-            f"権限がありません（`{ADMIN_ROLE_NAME}` ロールが必要です）。",
+            f"権限がありません（`{ADMIN_ROLE_ID}` ロールが必要です）。",
             ephemeral=True
         )
         return
@@ -718,6 +772,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
