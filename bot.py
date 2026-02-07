@@ -521,17 +521,8 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member: discord.Member):
-    # Botが入ってきた時は無視
     if member.bot:
         return
-
-    await create_or_open_room_for_member(member.guild, member)
-
-@bot.event
-async def on_member_join(member: discord.Member):
-    if member.bot:
-        return
-    await create_or_open_room_for_member(member.guild, member)
     channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
     if channel is None:
         return
@@ -839,6 +830,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
