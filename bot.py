@@ -601,18 +601,8 @@ async def on_interaction(interaction: discord.Interaction):
 
         asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
         return
-
+    # --- 次の質問 ---
     await upsert_question_message(interaction.channel, user_id, next_idx, order)
-
-
-        # --- 次の質問 ---
-        await upsert_question_message(
-            interaction.channel,
-            user_id,
-            next_idx,
-            order
-        )
-
     
 # ===== ボタンで開始 =====   
 async def create_or_open_room(interaction: discord.Interaction):
@@ -854,6 +844,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
