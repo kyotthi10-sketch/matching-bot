@@ -632,13 +632,6 @@ async def on_member_join(member: discord.Member):
             next_idx,
             order
         )
-    except Exception as e:
-    await interaction.followup.send(
-          f"⚠️ エラー：{type(e).__name__}",
-          ephemeral=True
-          )
-    raise
-
 
     
 # ===== ボタンで開始 =====   
@@ -881,6 +874,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
