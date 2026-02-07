@@ -12,7 +12,7 @@ from collections import defaultdict, Counter
 
 # ===== 環境変数 =====
 TOKEN = os.environ["DISCORD_TOKEN"]
-GUILD_ID = int(os.environ["1466960571004882967"])
+GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "Bot-管理者")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
@@ -357,6 +357,7 @@ if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
 
 
 bot.run(TOKEN)
+
 
 
 
