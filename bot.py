@@ -6,7 +6,7 @@ from discord.ext import commands
 from questions import QUESTIONS
 from db import (
     init_db, get_state, set_state, save_answer, load_answers, reset_user,
-    count_total_users, count_completed_users, count_inprogress_users
+    count_total_users, count_completed_users, count_inprogress_users,get_or_create_order, reset_order
 )
 from collections import defaultdict, Counter
 
@@ -24,6 +24,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ===== 共通変数 =====
 def has_admin_role(member: discord.Member) -> bool:
     return any(r.name == ADMIN_ROLE_NAME for r in member.roles)
+    
 def compatibility_percent(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
     usable = [c for c in categories if c in picks_a and c in picks_b]
     if not usable:
@@ -164,32 +165,50 @@ async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, secon
             pass
 
 # ===== 質問送信 =====
-async def send_question_to_channel(channel: discord.TextChannel, user_id: int, q_idx: int):
-    q = QUESTIONS[q_idx]
-    view = AnswerView(user_id, q_idx)
-    await channel.send(f"Q{q['id']}. {q['text']}", view=view)
+def q_by_id(qid: int) -> dict:
+    # QUESTIONSは小さいので線形でもOK。気になるなら辞書化してもOK。
+    for q in QUESTIONS:
+        if q["id"] == qid:
+            return q
+    raise KeyError(f"question id not found: {qid}")
+
+async def send_question_to_channel(channel: discord.TextChannel, user_id: int, idx: int):
+    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+    qid = order[idx]
+    q = q_by_id(qid)
+    view = AnswerView(user_id, idx, order)  # idxは「順番の何番目か」
+    await channel.send(f"Q{idx+1}. {q['text']}", view=view)
+
 
 # ===== ボタンUI =====
 class AnswerView(discord.ui.View):
-    def __init__(self, user_id: int, q_idx: int):
+    def __init__(self, user_id: int, idx: int, order: list[int]):
         super().__init__(timeout=180)
         self.user_id = user_id
-        self.q_idx = q_idx
-        q = QUESTIONS[q_idx]
+        self.idx = idx
+        self.order = order
+
+        q = q_by_id(order[idx])
         for key, label in q["choices"]:
-            self.add_item(AnswerButton(user_id, q_idx, key, label))
+            self.add_item(AnswerButton(user_id, idx, order, key, label))
 
 class AnswerButton(discord.ui.Button):
-    def __init__(self, user_id: int, q_idx: int, key: str, label: str):
+    def __init__(self, user_id: int, idx: int, order: list[int], key: str, label: str):
         super().__init__(style=discord.ButtonStyle.primary, label=f"{key}: {label}")
         self.user_id = user_id
-        self.q_idx = q_idx
+        self.idx = idx
+        self.order = order
         self.key = key
-
-    async def callback(self, interaction: discord.Interaction):
+        
+     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
             return
+         q = q_by_id(self.order[self.idx])
+        save_answer(self.user_id, q["id"], self.key)
+
+        next_idx = self.idx + 1
+        set_state(self.user_id, next_idx)
 
         save_answer(self.user_id, QUESTIONS[self.q_idx]["id"], self.key)
         next_idx = self.q_idx + 1
@@ -373,6 +392,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
