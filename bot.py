@@ -561,27 +561,27 @@ async def on_member_join(member: discord.Member):
 
     # ✅ 3秒制限回避：即ACK
         if not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
-
-    try:
-        # ans:{user_id}:{idx}:{key}
-        _, uid_s, idx_s, key = cid.split(":")
-        user_id = int(uid_s)
-        idx = int(idx_s)
+            await interaction.response.defer(ephemeral=True)
+            
+            try:
+                # ans:{user_id}:{idx}:{key}
+                _, uid_s, idx_s, key = cid.split(":")
+                user_id = int(uid_s)
+                idx = int(idx_s)
 
         # 他人操作拒否
-        if interaction.user.id != user_id:
-            await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
-            return
-
+            if interaction.user.id != user_id:
+                await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
+                return
+                
         # order取得（あなたの既存関数に合わせる）
         order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
-
+        
         # idxがズレていたら現在stateを優先して補正（事故防止）
         cur_idx = await asyncio.to_thread(get_state, user_id)
         if isinstance(cur_idx, int) and 0 <= cur_idx < len(order):
             idx = cur_idx
-
+            
         # 保存（sqliteはブロックするのでto_thread）
         q = q_by_id(order[idx])
         await asyncio.to_thread(save_answer, user_id, q["id"], key)
@@ -859,6 +859,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
