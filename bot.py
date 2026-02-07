@@ -326,11 +326,6 @@ async def stats(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-
-    # ✅ 管理者ロール限定
-    if not has_admin_role(interaction.user):
-        await interaction.response.send_message("権限がありません（管理者ロールが必要です）。", ephemeral=True)
-        return
 # ✅ 管理者チャンネル限定
 if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
     await interaction.response.send_message(
@@ -338,6 +333,11 @@ if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
         ephemeral=True
     )
     return
+      # ✅ 管理者ロール限定
+    if not has_admin_role(interaction.user):
+        await interaction.response.send_message("権限がありません（管理者ロールが必要です）。", ephemeral=True)
+        return
+        
     total = count_total_users()
     completed = count_completed_users(len(QUESTIONS))
     inprogress = count_inprogress_users(len(QUESTIONS))
@@ -357,6 +357,7 @@ if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
 
 
 bot.run(TOKEN)
+
 
 
 
