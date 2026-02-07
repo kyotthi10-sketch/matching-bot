@@ -3,36 +3,41 @@ from typing import List, Tuple
 
 DB_PATH = "app.db"
 
-def init_db() -> None:
+def init_db():
     with sqlite3.connect(DB_PATH) as con:
         cur = con.cursor()
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS user_state (
             user_id INTEGER PRIMARY KEY,
-            idx INTEGER NOT NULL DEFAULT 0
+            idx INTEGER NOT NULL
         )
         """)
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS answers (
             user_id INTEGER NOT NULL,
-            question_id INTEGER NOT NULL,
-            answer TEXT NOT NULL,
-            PRIMARY KEY (user_id, question_id)
+            qid INTEGER NOT NULL,
+            ans TEXT NOT NULL,
+            PRIMARY KEY (user_id, qid)
         )
         """)
-        con.commit()
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS question_order (
             user_id INTEGER PRIMARY KEY,
             order_json TEXT NOT NULL
         )
         """)
+
         cur.execute("""
-　　　　 CREATE TABLE IF NOT EXISTS user_msg (
-        user_id INTEGER PRIMARY KEY,
-        message_id INTEGER NOT NULL
+        CREATE TABLE IF NOT EXISTS user_msg (
+            user_id INTEGER PRIMARY KEY,
+            message_id INTEGER NOT NULL
         )
         """)
+
+        con.commit()
 
 
 def get_state(user_id: int) -> int:
