@@ -189,7 +189,7 @@ def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) ->
 
 async def create_or_open_room_for_member(guild: discord.Guild, member: discord.Member):
     user_id = member.id
-    channel_name = f"match-{user_id}"
+    channel_name = f"match-{member.mention}"
 
     # 既存ルームがあれば案内だけ
     for ch in guild.text_channels:
@@ -874,6 +874,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
