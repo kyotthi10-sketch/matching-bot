@@ -194,25 +194,38 @@ class AnswerView(discord.ui.View):
 
 class AnswerButton(discord.ui.Button):
     def __init__(self, user_id: int, idx: int, order: list[int], key: str, label: str):
-        super().__init__(style=discord.ButtonStyle.primary, label=f"{key}: {label}")
+        super().__init__(
+            style=discord.ButtonStyle.primary,
+            label=f"{key}: {label}"
+        )
         self.user_id = user_id
         self.idx = idx
         self.order = order
         self.key = key
-        
-     async def callback(self, interaction: discord.Interaction):
+
+    async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
+            await interaction.response.send_message(
+                "これはあなたの診断ではありません。",
+                ephemeral=True
+            )
             return
-         q = q_by_id(self.order[self.idx])
+
+        q = q_by_id(self.order[self.idx])
         save_answer(self.user_id, q["id"], self.key)
 
         next_idx = self.idx + 1
         set_state(self.user_id, next_idx)
 
-        save_answer(self.user_id, QUESTIONS[self.q_idx]["id"], self.key)
-        next_idx = self.q_idx + 1
-        set_state(self.user_id, next_idx)
+        if next_idx >= len(self.order):
+            msg = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
+            await interaction.response.edit_message(content=msg, view=None)
+        else:
+            nq = q_by_id(self.order[next_idx])
+            await interaction.response.edit_message(
+                content=f"Q{next_idx + 1}. {nq['text']}",
+                view=AnswerView(self.user_id, next_idx, self.order)
+            )
 
         # 最終質問
         if next_idx >= len(QUESTIONS):
@@ -221,8 +234,6 @@ class AnswerButton(discord.ui.Button):
                 await interaction.channel.set_permissions(interaction.user, send_messages=True)
 
             msg = (
-                "✅ **診断完了！**\n\n"
-                + categorized_result(self.user_id)
                 + f"\n\n⏳ このルームは {AUTO_CLOSE_SECONDS//60} 分後に自動削除されます。\n"
                   "すぐ消す場合は `/close`"
             )
@@ -392,6 +403,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
