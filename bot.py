@@ -168,6 +168,29 @@ def categorized_result(user_id: int) -> str:
         return "🧩 **診断結果**\n\nデータが不足しています。/start からやり直してください。" + footer
 
     return header + "\n".join(lines) + footer
+# ===== メッセージ固定 =====
+async def upsert_question_message(channel: discord.TextChannel, user_id: int, idx: int, order: list[int]):
+    qid = order[idx]
+    q = q_by_id(qid)
+    header = progress_text(idx, len(order))
+    content = f"{header}\nQ{idx+1}. {q['text']}"
+    view = AnswerView(user_id, idx, order)
+
+    mid = get_message_id(user_id)
+    if mid is None:
+        msg = await channel.send(content, view=view)
+        set_message_id(user_id, msg.id)
+        return msg
+
+    try:
+        msg = await channel.fetch_message(mid)
+        await msg.edit(content=content, view=view)
+        return msg
+    except Exception:
+        # メッセージが消された等 → 作り直す
+        msg = await channel.send(content, view=view)
+        set_message_id(user_id, msg.id)
+        return msg
 
 
 # ===== 自動削除 =====
@@ -231,7 +254,10 @@ class AnswerButton(discord.ui.Button):
                 "これはあなたの診断ではありません。",
                 ephemeral=True
             )
-            return
+              return
+            else:
+                await interaction.response.defer()  # まず応答を確定
+                await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
 
         q = q_by_id(self.order[self.idx])
         save_answer(self.user_id, q["id"], self.key)
@@ -253,26 +279,31 @@ class AnswerButton(discord.ui.Button):
             )
 
         # 最終質問
-        if next_idx >= len(QUESTIONS):
-            # ロック解除
-            if is_user_room(interaction.channel, self.user_id):
-                await interaction.channel.set_permissions(interaction.user, send_messages=True)
+        if next_idx >= len(self.order):
+    await interaction.response.defer()
 
-            msg = (
-                + f"\n\n⏳ このルームは {AUTO_CLOSE_SECONDS//60} 分後に自動削除されます。\n"
-                  "すぐ消す場合は `/close`"
-            )
-            await interaction.response.edit_message(content=msg, view=None)
+    # ロック解除（あなたの設計があるなら）
+    if is_user_room(interaction.channel, self.user_id):
+        await interaction.channel.set_permissions(interaction.user, send_messages=True)
 
-            # 自動削除予約
-            asyncio.create_task(
-                schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS)
-            )
-        else:
-            await interaction.response.edit_message(
-                content=f"Q{QUESTIONS[next_idx]['id']}. {QUESTIONS[next_idx]['text']}",
-                view=AnswerView(self.user_id, next_idx)
-            )
+    mid = get_message_id(self.user_id)
+    msg = None
+    if mid:
+        try:
+            msg = await interaction.channel.fetch_message(mid)
+        except Exception:
+            msg = None
+
+    result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
+
+    if msg:
+        await msg.edit(content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後に自動削除 / すぐ消すなら /close", view=None)
+    else:
+        await interaction.channel.send(result_text)
+
+    asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
+    return
+
 
 # ===== イベント =====
 @bot.event
@@ -310,8 +341,13 @@ async def room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
     await ch.send("📝 このルームは診断専用です。ボタンで回答してください。")
 
-    reset_user(user_id)
-    await send_question_to_channel(ch, user_id, 0)
+　　reset_user(user_id)
+　　reset_order(user_id)
+　　reset_message_id(user_id)
+
+order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+await upsert_question_message(ch, user_id, 0, order)
+
 
 @bot.tree.command(name="start", description="診断開始", guild=discord.Object(id=GUILD_ID))
 async def start(interaction: discord.Interaction):
@@ -428,6 +464,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
