@@ -98,10 +98,8 @@ def count_inprogress_users(total_questions: int) -> int:
 
 # ===== 共通判定 =====
 def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
-    return (
-        isinstance(channel, discord.TextChannel)
-        and (channel.topic or "").startswith(f"user:{user_id}")
-        and channel.topic == f"user:{user_id}"
+    return isinstance(channel, discord.TextChannel) and (channel.topic or "").startswith(f"user:{user_id}")
+     and channel.topic == f"user:{user_id}"
     )
 from collections import defaultdict, Counter
 
@@ -633,10 +631,10 @@ async def create_or_open_room(interaction: discord.Interaction):
 
 # ===== コマンド =====
 
-@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
-async def room(interaction: discord.Interaction):
-    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+    @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
+    async def room(interaction: discord.Interaction):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
     guild = interaction.guild
@@ -651,12 +649,12 @@ async def room(interaction: discord.Interaction):
     for ch in guild.text_channels:
         if is_user_room(ch, user_id):
             await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
-            return
+        return
 
     # Bot自身(Member)が取れない場合は中断
     if guild.me is None:
         await interaction.response.send_message("Bot情報の取得に失敗しました。少し待ってから再度実行してください。", ephemeral=True)
-        return
+    return
 
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -832,16 +830,16 @@ async def logs(interaction: discord.Interaction):
 
 @bot.tree.command(name="sync", description="コマンドを同期（運営専用）", guild=discord.Object(id=GUILD_ID))
 async def sync_cmd(interaction: discord.Interaction):
-    if interaction.guild is None:
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
-    # 運営チェック（あなたの実装でOK）
-    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+    # ✅ 運営ロール（ADMIN_ROLE_ID）限定
+    if not any(r.id == ADMIN_ROLE_ID for r in interaction.user.roles):
         await interaction.response.send_message("権限がありません。", ephemeral=True)
         return
 
-    # ✅ 追加：グローバルコマンドをこのサーバーへコピー
+    # ✅ ここがB案の肝：グローバルコマンドをこのサーバーへコピー
     bot.tree.copy_global_to(guild=interaction.guild)
 
     synced = await bot.tree.sync(guild=interaction.guild)
@@ -849,42 +847,8 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 
+
 bot.run(TOKEN)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
