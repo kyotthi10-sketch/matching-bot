@@ -199,7 +199,7 @@ def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) ->
     return int(round(same / len(usable) * 100))
 
 async def create_or_open_room_for_member(guild: discord.Guild, member: discord.Member):
-    user_id = member.id
+    user_id = user.id
     channel_name = f"match-{member.mention}"
 
     # 既存ルームがあれば案内だけ
@@ -630,7 +630,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
 async def room(interaction: discord.Interaction):
     guild = interaction.guild
-    user_id = interaction.member.id
+    user_id = interaction.user.id
     safe_name = safe_channel_name(member.display_name)
     channel_name = f"match-{safe_name}"
     
@@ -830,6 +830,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
