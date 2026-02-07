@@ -630,6 +630,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 
 
 # ===== コマンド =====
+
 @bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始")
 async def room(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
@@ -778,7 +779,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
-    await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
+    await interaction.response.send_message("✅ 同期しました。", ephemeral=True)
 
 
 @bot.tree.command(name="panel", description="診断開始ボタンを設置（運営専陽）")
@@ -845,6 +846,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
