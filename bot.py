@@ -62,13 +62,17 @@ def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
         and channel.name == f"match-{user_id}"
         and channel.topic == f"user:{user_id}"
     )
-SCALE = {"A": 0, "B": 50, "C": 100}
+from collections import defaultdict, Counter
+
+# 5段階：A=0, B=25, C=50, D=75, E=100
+SCALE = {"A": 0, "B": 25, "C": 50, "D": 75, "E": 100}
+VALID_ANS = set(SCALE.keys())
 
 def build_profile(user_id: int):
     """
     returns:
-      picks: dict(category -> "A"/"B"/"C")  最頻回答
-      meters: dict(category -> 0..100)      平均％（A=0,B=50,C=100）
+      picks:  dict(category -> "A".."E")  最頻回答
+      meters: dict(category -> 0..100)   平均スコア
     """
     answers = load_answers(user_id)
     qid_to_cat = {q["id"]: q.get("category") for q in QUESTIONS}
@@ -76,7 +80,7 @@ def build_profile(user_id: int):
     by_cat = defaultdict(list)
     for qid, ans in answers:
         cat = qid_to_cat.get(qid)
-        if cat and ans in ("A", "B", "C"):
+        if cat and ans in VALID_ANS:
             by_cat[cat].append(ans)
 
     picks = {}
@@ -87,6 +91,7 @@ def build_profile(user_id: int):
         meters[cat] = int(round(sum(SCALE[x] for x in lst) / len(lst)))
 
     return picks, meters
+
 
 def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
     usable = [c for c in categories if c in picks_a and c in picks_b]
@@ -368,6 +373,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
