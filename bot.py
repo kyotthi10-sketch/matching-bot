@@ -17,7 +17,8 @@ from collections import defaultdict, Counter
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["GUILD_ID"])
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
-ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "Bot-管理者")
+BOTADMIN_ROLE_NAME = os.environ.get("BOTADMIN_ROLE_NAME", "Bot-管理者")
+ADMIN_ROLE_NAME = os.environ.get("ADMIN_ROLE_NAME", "運営")
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
 CATEGORY_LABEL = {
     "game_style": "ゲーム志向",
@@ -35,7 +36,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ===== 共通変数 =====
 def has_admin_role(member: discord.Member) -> bool:
-    return any(r.name == ADMIN_ROLE_NAME for r in member.roles)
+    return any(r.name == BOTADMIN_ROLE_NAME for r in member.roles)
     
 def compatibility_percent(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
     usable = [c for c in categories if c in picks_a and c in picks_b]
@@ -78,6 +79,13 @@ def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
 from collections import defaultdict, Counter
 
 # ===== 共通関数 =====
+async def post_panel(channel: discord.TextChannel):
+    embed = discord.Embed(
+        title="🎮 診断スタート",
+        description="下のボタンを押すと、あなた専用の診断ルームが作成されます。",
+    )
+    await channel.send(embed=embed, view=StartRoomView())
+
 # 5段階：A=0, B=25, C=50, D=75, E=100
 SCALE = {"A": 0, "B": 25, "C": 50, "D": 75, "E": 100}
 VALID_ANS = set(SCALE.keys())
@@ -580,25 +588,17 @@ async def sync_cmd(interaction: discord.Interaction):
     await bot.tree.sync(guild=guild)
     await interaction.response.send_message("✅ 同期しました。/panel を確認してください。", ephemeral=True)
 
-@bot.tree.command(
-    name="panel",
-    description="診断開始ボタンを設置（管理者用）",
-    guild=discord.Object(id=GUILD_ID)
-)
+@bot.tree.command(name="panel", description="診断開始ボタンを設置（指定ロール専用）")
 async def panel(interaction: discord.Interaction):
 
-    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message("このコマンドは運営専用です。",ephemeral=True
-        )
+    # 指定ロール制限（すでに入れている想定）
+    if not has_role(interaction.user, BOTADMIN_ROLE_ID):
+        await interaction.response.send_message("権限がありません。", ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title="🎮 診断スタート",
-        description="下のボタンを押すと、あなた専用の診断ルームが作成されます。",
-    )
-
+    await post_panel(interaction.channel)
     await interaction.response.send_message("✅ 設置しました。", ephemeral=True)
-    await interaction.channel.send(embed=embed, view=StartRoomView())
+
 
 
 
@@ -649,6 +649,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
