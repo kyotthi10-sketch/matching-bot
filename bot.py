@@ -551,7 +551,7 @@ async def on_member_join(member: discord.Member):
     @bot.event
     async def on_interaction(interaction: discord.Interaction):
     # ボタン以外は無視（slash等はdiscord.pyが処理する）
-    if interaction.type != discord.InteractionType.component:
+        if interaction.type != discord.InteractionType.component:
         return
 
     data = interaction.data or {}
@@ -560,7 +560,7 @@ async def on_member_join(member: discord.Member):
         return
 
     # ✅ 3秒制限回避：即ACK
-    if not interaction.response.is_done():
+        if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
     try:
@@ -859,6 +859,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
