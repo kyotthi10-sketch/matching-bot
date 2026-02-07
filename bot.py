@@ -335,13 +335,13 @@ async def upsert_question_message(
     channel: discord.TextChannel,
     user_id: int,
     idx: int,
-    order: list[int]
+    order: list[int],
 ):
     qid = order[idx]
     q = q_by_id(qid)
 
     embed = build_question_embed(idx, len(order), q)
-    view = AnswerView(user_id, idx, order)
+    view = AnswerView(user_id, idx)
 
     mid = await asyncio.to_thread(get_message_id, user_id)
 
@@ -391,16 +391,22 @@ async def send_question_to_channel(channel: discord.TextChannel, user_id: int, i
 
 
 # ===== ボタンUI =====
-class AnswerView(discord.ui.View):
-    def __init__(self, user_id: int, idx: int, order: list[int]):
-        super().__init__(timeout=None)
-        self.user_id = user_id
-        self.idx = idx
-        self.order = order
+def stars_from_key(key: str) -> str:
+    return {"A": "★☆☆☆☆", "B": "★★☆☆☆", "C": "★★★☆☆", "D": "★★★★☆", "E": "★★★★★"}.get(key, "★☆☆☆☆")
 
-        q = q_by_id(order[idx])
-        for key, label in q["choices"]:
-            self.add_item(AnswerButton(user_id, idx, order, key, f"{stars(key)} {label}"))
+
+class AnswerView(discord.ui.View):
+    def __init__(self, user_id: int, idx: int):
+        super().__init__(timeout=None)
+
+        for key in ["A", "B", "C", "D", "E"]:
+            self.add_item(
+                discord.ui.Button(
+                    label=stars_from_key(key),
+                    style=discord.ButtonStyle.secondary,
+                    custom_id=f"ans:{user_id}:{idx}:{key}",
+                )
+            )
 
 
 class AnswerButton(discord.ui.Button):
@@ -541,6 +547,76 @@ async def on_member_join(member: discord.Member):
 
     # 診断パネルを自動設置
     await post_panel(channel)
+    
+    @bot.event
+async def on_interaction(interaction: discord.Interaction):
+    # ボタン以外は無視（slash等はdiscord.pyが処理する）
+    if interaction.type != discord.InteractionType.component:
+        return
+
+    data = interaction.data or {}
+    cid = data.get("custom_id", "")
+    if not isinstance(cid, str) or not cid.startswith("ans:"):
+        return
+
+    # ✅ 3秒制限回避：即ACK
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
+    try:
+        # ans:{user_id}:{idx}:{key}
+        _, uid_s, idx_s, key = cid.split(":")
+        user_id = int(uid_s)
+        idx = int(idx_s)
+
+        # 他人操作拒否
+        if interaction.user.id != user_id:
+            await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
+            return
+
+        # order取得（あなたの既存関数に合わせる）
+        order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
+
+        # idxがズレていたら現在stateを優先して補正（事故防止）
+        cur_idx = await asyncio.to_thread(get_state, user_id)
+        if isinstance(cur_idx, int) and 0 <= cur_idx < len(order):
+            idx = cur_idx
+
+        # 保存（sqliteはブロックするのでto_thread）
+        q = q_by_id(order[idx])
+        await asyncio.to_thread(save_answer, user_id, q["id"], key)
+
+        next_idx = idx + 1
+        await asyncio.to_thread(set_state, user_id, next_idx)
+
+        # 完了
+        if next_idx >= len(order):
+            result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+
+            mid = await asyncio.to_thread(get_message_id, user_id)
+            msg = None
+            if mid:
+                try:
+                    msg = await interaction.channel.fetch_message(mid)
+                except Exception:
+                    msg = None
+
+            if msg:
+                await msg.edit(content=result_text + notice, embed=None, view=None)
+            else:
+                await interaction.followup.send(result_text + notice, ephemeral=True)
+
+            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+            return
+
+        # 次の質問へ（固定メッセージ更新）
+        await upsert_question_message(interaction.channel, user_id, next_idx, order)
+
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ エラー：{type(e).__name__}", ephemeral=True)
+        raise
+
 
     
 # ===== ボタンで開始 =====   
@@ -783,6 +859,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
