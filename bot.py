@@ -324,7 +324,7 @@ def categorized_result(user_id: int) -> str:
 
     # 「相性％」は /match で相手と比較して出すのが自然なので
     # ここでは “あなたの指標” を％で必ず見せる（要求①）
-    header = "🧩 **診断結果（ゲーム × リアル）**\n"
+    header = "🧩 **診断結果**\n"
     footer = "\n\n🔎 相性％（TOP3）は `/match` で表示できます。"
     if shown == 0:
         return "🧩 **診断結果**\n\nデータが不足しています。/start からやり直してください。" + footer
@@ -783,50 +783,6 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
