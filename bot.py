@@ -238,8 +238,8 @@ class AnswerView(discord.ui.View):
         self.order = order
 
         q = q_by_id(order[idx])
-     　 for key, label in q["choices"]:
-    self.add_item(AnswerButton(user_id, idx, order, key, f"{stars(key)} {label}"))
+        for key, label in q["choices"]:
+            self.add_item(AnswerButton(user_id, idx, order, key, f"{stars(key)} {label}"))
 
 
 class AnswerButton(discord.ui.Button):
@@ -469,6 +469,7 @@ async def stats(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
