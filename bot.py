@@ -12,6 +12,19 @@ from db import (
 )
 
 from collections import defaultdict, Counter
+import asyncio
+
+AUTO_CLOSE_SECONDS = 5 * 60  # 15分（好きに変更）
+
+async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, seconds: int):
+    await asyncio.sleep(seconds)
+
+    # 念のため、まだ存在しているかチェックして削除
+    try:
+        await channel.delete(reason=f"Auto close (user:{user_id})")
+    except Exception:
+        pass
+
 
 # ===== 環境変数 =====
 TOKEN = os.environ["DISCORD_TOKEN"]
@@ -447,61 +460,61 @@ async def create_or_open_room(interaction: discord.Interaction):
     await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
 
 async def callback(self, interaction: discord.Interaction):
-    # 他人のボタン操作を防止
+    # 他人の操作は即返す（この場合だけ response.send_message でOK）
     if interaction.user.id != self.user_id:
         await interaction.response.send_message("これはあなたの診断ではありません。", ephemeral=True)
         return
 
-# 3秒制限回避：最初に応答を確定
-if not interaction.response.is_done():
-    await interaction.response.defer(ephemeral=True)
+    # 3秒制限対策：最初に必ずdefer（これで「インタラクションに失敗」激減）
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
 
-    # まず回答保存
-    q = q_by_id(self.order[self.idx])
-    save_answer(self.user_id, q["id"], self.key)
+    try:
+        # --- 回答保存 ---
+        q = q_by_id(self.order[self.idx])
+        save_answer(self.user_id, q["id"], self.key)
 
-    # 次へ
-    next_idx = self.idx + 1
-    set_state(self.user_id, next_idx)
+        next_idx = self.idx + 1
+        set_state(self.user_id, next_idx)
 
-    # ここで一旦応答を確定（時間切れ防止）
-    await interaction.response.defer()
+        # --- 完了処理 ---
+        if next_idx >= len(self.order):
+            result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
 
-    # 最終問題なら結果表示（固定メッセージを結果に差し替え）
-    if next_idx >= len(self.order):
-        # 診断完了でロック解除（あなたの運用がC=削除なら解除は任意）
-        if is_user_room(interaction.channel, self.user_id):
-            try:
-                await interaction.channel.set_permissions(interaction.user, send_messages=True)
-            except Exception:
-                pass
+            # 固定メッセージを結果に差し替え
+            mid = get_message_id(self.user_id)
+            msg = None
+            if mid:
+                try:
+                    msg = await interaction.channel.fetch_message(mid)
+                except Exception:
+                    msg = None
 
-        result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
+            if msg:
+                await msg.edit(
+                    content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。",
+                    embed=None,
+                    view=None
+                )
+            else:
+                await interaction.followup.send(
+                    result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。",
+                    ephemeral=True
+                )
 
-        # 固定メッセージを編集して結果にする
-        mid = get_message_id(self.user_id)
-        msg = None
-        if mid:
-            try:
-                msg = await interaction.channel.fetch_message(mid)
-            except Exception:
-                msg = None
+            # ✅ 自動削除スタート（チャンネルを消す）
+            asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
+            return
 
-        if msg:
-            await msg.edit(
-                content=result_text + f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後に自動削除 / すぐ消すなら /close",
-                embed=None,
-                view=None
-            )
-        else:
-            await interaction.channel.send(result_text)
+        # --- 次の質問へ（固定メッセージを更新） ---
+        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
 
-        # 自動削除（チャンネル削除）
-        asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
-        return
-
-    # まだ続くなら、固定メッセージを「次の質問Embed」に更新
-    await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
+    except Exception as e:
+        # 例外で沈黙すると「失敗しました」になるので、必ずフォローアップで返す
+        await interaction.followup.send(f"⚠️ エラーが発生しました：{type(e).__name__}", ephemeral=True)
+        raise
+        # まだ続くなら、固定メッセージを「次の質問Embed」に更新
+        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
 
 # ===== イベント =====
 @bot.event
@@ -776,6 +789,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
