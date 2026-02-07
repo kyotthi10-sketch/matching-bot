@@ -354,6 +354,7 @@ async def callback(self, interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     init_db()
+    bot.add_view(StartRoomView())  # ボタンを永続化している場合
     guild = discord.Object(id=GUILD_ID)
     await bot.tree.sync(guild=guild)
     print(f"Bot起動: {bot.user}")
@@ -547,6 +548,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
