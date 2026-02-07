@@ -830,7 +830,7 @@ async def logs(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="sync", description="コマンドを同期（運営専用）")
+@bot.tree.command(name="sync", description="コマンドを同期（運営専用）",guild=discord.Object(id=GUILD_ID))
 async def sync_cmd(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
@@ -847,6 +847,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
