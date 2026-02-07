@@ -552,7 +552,7 @@ async def on_member_join(member: discord.Member):
     async def on_interaction(interaction: discord.Interaction):
     # ボタン以外は無視（slash等はdiscord.pyが処理する）
         if interaction.type != discord.InteractionType.component:
-        return
+            return
 
     data = interaction.data or {}
     cid = data.get("custom_id", "")
@@ -859,6 +859,7 @@ async def logs(interaction: discord.Interaction):
 
 
 bot.run(TOKEN)
+
 
 
 
