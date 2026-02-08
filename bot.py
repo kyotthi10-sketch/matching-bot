@@ -479,16 +479,16 @@ async def on_interaction(interaction: discord.Interaction):
         await asyncio.to_thread(set_state, user_id, next_idx)
 
         # 完了
-if next_idx >= len(order):
-    result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
+    if next_idx >= len(order):
+        result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
 
-    # ✅ 完了したら自動でTOP3を結果の下に付ける
-    top3_text = build_match_top3_text(user_id)
+        # ✅ 完了したら自動でTOP3を結果の下に付ける
+        top3_text = build_match_top3_text(user_id)
 
-    notice = (
-        f"\n\n✅ `/match` でも再表示できます。"
-        f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
-    )
+        notice = (
+            f"\n\n✅ `/match` でも再表示できます。"
+            f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+        )
 
     # ✅ 完了したらチャット解放（スマホで /match 打てる）
     if isinstance(interaction.user, discord.Member):
@@ -685,6 +685,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
