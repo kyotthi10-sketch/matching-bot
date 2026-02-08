@@ -1,51 +1,40 @@
 import os
+import re
+import json
+import random
 import asyncio
+import sqlite3
+from collections import defaultdict, Counter
+from typing import List, Tuple, Optional
+
 import discord
-_synced_once = False
 from discord.ext import commands
 
 from questions import QUESTIONS
 from db import (
-    init_db, get_state, set_state, save_answer, load_answers, reset_user,
+    init_db,
+    get_state, set_state,
+    save_answer, load_answers, reset_user,
     get_or_create_order, reset_order,
     get_message_id, set_message_id, reset_message_id,
-    count_total_users, count_completed_users, count_inprogress_users
+    count_total_users, count_completed_users, count_inprogress_users,
 )
 
-from collections import defaultdict, Counter
-import asyncio
-
-AUTO_CLOSE_SECONDS = 5 * 60  # 15分（好きに変更）
-
-async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, seconds: int):
-    await asyncio.sleep(seconds)
-
-    # 念のため、まだ存在しているかチェックして削除
-    try:
-        await channel.delete(reason=f"Auto close (user:{user_id})")
-    except Exception:
-        pass
-import re
-
-def safe_channel_name(name: str) -> str:
-    # 小文字化
-    name = name.lower()
-    # 英数字以外を - に変換
-    name = re.sub(r"[^a-z0-9]", "-", name)
-    # - が連続したら1つに
-    name = re.sub(r"-+", "-", name)
-    # 前後の - を削除
-    return name.strip("-") or "user"
-
-
-# ===== 環境変数 =====
+# =========================================================
+# 環境変数
+# =========================================================
 TOKEN = os.environ["DISCORD_TOKEN"]
-GUILD_ID = int(os.environ["GUILD_ID"])
-AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
-BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))
-ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))
-ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))
-WELCOME_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1466960571688550537"))
+GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
+
+AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))  # 既定: 5分
+BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "0"))        # /panel など
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "0"))              # /sync /ping など
+ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "0"))        # /logs などに使う（任意）
+WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "0"))    # join時にパネルを置く場所
+
+# db.py のDBパスと合わせる（db.pyが "app.db" の想定）
+DB_PATH = os.environ.get("DB_PATH", "app.db")
+
 CATEGORY_LABEL = {
     "game_style": "ゲームスタイル",
     "communication": "コミュニケーション",
@@ -55,76 +44,64 @@ CATEGORY_LABEL = {
     "future": "将来観・価値観",
 }
 
-
-
+# =========================================================
+# Bot
+# =========================================================
 intents = discord.Intents.default()
-intents.members = True
+intents.members = True  # on_member_join 用
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== 共通変数 =====
-def has_admin_role(member: discord.Member) -> bool:
-    return any(r.name == BOTADMIN_ROLE_NAME for r in member.roles)
-    
-def compatibility_percent(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
-    usable = [c for c in categories if c in picks_a and c in picks_b]
-    if not usable:
-        return 0
-    same = sum(1 for c in usable if picks_a[c] == picks_b[c])
-    return int(round(same / len(usable) * 100))
+# =========================================================
+# 共通ユーティリティ
+# =========================================================
+def safe_channel_name(name: str) -> str:
+    """
+    Discordチャンネル名は英小文字/数字/ハイフンが安全
+    """
+    name = name.lower()
+    name = re.sub(r"[^a-z0-9]", "-", name)
+    name = re.sub(r"-+", "-", name)
+    name = name.strip("-")
+    return name or "user"
 
-def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
-    # A案：0〜100pt（％と同じスケール）
-    return compatibility_percent(picks_a, picks_b, categories)
+def has_role_id(member: discord.Member, role_id: int) -> bool:
+    if role_id <= 0:
+        return False
+    return any(r.id == role_id for r in member.roles)
 
+def is_user_room(channel: discord.abc.GuildChannel, user_id: int) -> bool:
+    """
+    ルーム名が変わっても壊れないよう topic で判定
+    topic: "user:{id} ..."
+    """
+    if not isinstance(channel, discord.TextChannel):
+        return False
+    return (channel.topic or "").startswith(f"user:{user_id}")
 
-# ===== 集計変数 =====
-def count_total_users() -> int:
-    with sqlite3.connect(DB_PATH) as con:
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM user_state")
-        return int(cur.fetchone()[0])
-
-def count_completed_users(total_questions: int) -> int:
-    with sqlite3.connect(DB_PATH) as con:
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM user_state WHERE idx >= ?", (total_questions,))
-        return int(cur.fetchone()[0])
-
-def count_inprogress_users(total_questions: int) -> int:
-    with sqlite3.connect(DB_PATH) as con:
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM user_state WHERE idx < ?", (total_questions,))
-        return int(cur.fetchone()[0])
-
-# ===== 共通判定 =====
-def is_user_room(channel: discord.TextChannel, user_id: int) -> bool:
-    return isinstance(channel, discord.TextChannel) and (channel.topic or "").startswith(f"user:{user_id}")
-    from collections import defaultdict, Counter
-
-# ===== 共通関数 =====
-async def post_panel(channel: discord.TextChannel):
-    embed = discord.Embed(
-        title="🎮 診断スタート",
-        description="下のボタンを押すと、あなた専用の診断ルームが作成されます。",
-    )
-    await channel.send(embed=embed, view=StartRoomView())
-
-# 5段階：A=0, B=25, C=50, D=75, E=100
-SCALE = {"A": 0, "B": 25, "C": 50, "D": 75, "E": 100}
-VALID_ANS = set(SCALE.keys())
+# 5段階：A=★1〜E=★5
 STAR_MAP = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5}
+VALID_ANS = set(STAR_MAP.keys())
 
 def stars(letter: str) -> str:
     n = STAR_MAP.get(letter, 3)
     return "★" * n + "☆" * (5 - n)
 
-def progress_bar(current: int, total: int, width: int = 10) -> str:
+def progress_bar(current: int, total: int, width: int = 12) -> str:
     if total <= 0:
         return ""
     filled = int(round((current / total) * width))
     filled = max(0, min(width, filled))
     return "■" * filled + "□" * (width - filled)
 
+def q_by_id(qid: int) -> dict:
+    for q in QUESTIONS:
+        if q["id"] == qid:
+            return q
+    raise KeyError(f"question id not found: {qid}")
+
+# =========================================================
+# Embed（質問表示）
+# =========================================================
 def build_question_embed(idx: int, total: int, q: dict) -> discord.Embed:
     embed = discord.Embed(
         title="🎮 ロール診断",
@@ -152,21 +129,15 @@ def build_question_embed(idx: int, total: int, q: dict) -> discord.Embed:
         )
 
     embed.set_footer(text="★が多いほど強い／頻度が高い傾向です")
-
     return embed
-    
 
-def progress_text(idx: int, total: int) -> str:
-    # idx は 0始まり。表示は 1/total
-    now = min(idx + 1, total)
-    bar = progress_bar(now, total, width=12)
-    return f"[{bar}] {now}/{total}"
-
+# =========================================================
+# プロフィール集計
+# =========================================================
 def build_profile(user_id: int):
     """
-    returns:
-      picks:  dict(category -> "A".."E")  最頻回答
-      meters: dict(category -> 0..100)   平均スコア
+    picks:  dict(category -> "A".."E")  最頻回答
+    meters: dict(category -> 1..5       平均星）
     """
     answers = load_answers(user_id)
     qid_to_cat = {q["id"]: q.get("category") for q in QUESTIONS}
@@ -182,68 +153,11 @@ def build_profile(user_id: int):
     for cat, lst in by_cat.items():
         c = Counter(lst)
         picks[cat] = c.most_common(1)[0][0]
-        meters[cat] = int(round(sum(SCALE[x] for x in lst) / len(lst)))
+        meters[cat] = int(round(sum(STAR_MAP[x] for x in lst) / len(lst)))
 
     return picks, meters
 
-
-def compatibility_points(picks_a: dict, picks_b: dict, categories: list[str]) -> int:
-    usable = [c for c in categories if c in picks_a and c in picks_b]
-    if not usable:
-        return 0
-    same = sum(1 for c in usable if picks_a[c] == picks_b[c])
-    # 0〜100pt
-    return int(round(same / len(usable) * 100))
-
-async def create_or_open_room_for_member(guild: discord.Guild, member: discord.Member):
-    user_id = user.id
-    channel_name = f"match-{member.mention}"
-
-    # 既存ルームがあれば案内だけ
-    for ch in guild.text_channels:
-        if is_user_room(ch, user_id):
-            try:
-                await member.send(f"✅ 既に専用ルームがあります：{ch.mention}")
-            except Exception:
-                pass
-            return ch
-
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
-    }
-
-    ch = await guild.create_text_channel(
-        channel_name,
-        topic=f"user:{user_id}",
-        overwrites=overwrites
-    )
-
-    # 初期化
-    reset_user(user_id)
-    reset_order(user_id)
-    reset_message_id(user_id)
-
-    # 出題順 → 1つの固定メッセージ（Embed）で開始
-    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
-    await upsert_question_message(ch, user_id, 0, order)
-
-    # 本人にDMで案内（DM拒否されてたら無視）
-    try:
-        await member.send(f"🎮 診断ルームを作成しました：{ch.mention}")
-    except Exception:
-        pass
-
-    return ch
-
-
-# ===== 診断結果（カテゴライズ）=====
 def categorized_result(user_id: int) -> str:
-    """
-    30問 / 6カテゴリ / 5段階（A〜E）
-    - 各カテゴリ：文章 + ★表示
-    """
     picks, meters = build_profile(user_id)
 
     CATS = ["game_style", "communication", "play_time", "distance", "money", "future"]
@@ -306,28 +220,65 @@ def categorized_result(user_id: int) -> str:
     for cat in CATS:
         if cat not in picks:
             continue
-
-        letter = picks[cat]  # A〜E
+        letter = picks[cat]
         desc = TEXT[cat].get(letter, letter)
-        star = stars(letter)
-
-        lines.append(f"{LABEL.get(cat, cat)}：{desc}\n{star}")
+        lines.append(f"{LABEL.get(cat, cat)}：{desc}\n{stars(letter)}")
 
     header = "🧩 **診断結果**\n\n"
     footer = "\n\n🔎 相性％（TOP3）は `/match` で表示できます。"
 
     if not lines:
-        return header + "データが不足しています。/start からやり直してください。" + footer
+        return header + "データが不足しています。/room からやり直してください。" + footer
 
     return header + "\n\n".join(lines) + footer
 
-# ===== メッセージ固定 =====
-async def upsert_question_message(
-    channel: discord.TextChannel,
-    user_id: int,
-    idx: int,
-    order: list[int],
-):
+# =========================================================
+# ボタンUI
+# =========================================================
+def stars_from_key(key: str) -> str:
+    return {"A": "★☆☆☆☆", "B": "★★☆☆☆", "C": "★★★☆☆", "D": "★★★★☆", "E": "★★★★★"}.get(key, "★☆☆☆☆")
+
+class AnswerView(discord.ui.View):
+    """
+    custom_id: ans:{user_id}:{idx}:{key}
+    """
+    def __init__(self, user_id: int, idx: int):
+        super().__init__(timeout=None)
+        for key in ["A", "B", "C", "D", "E"]:
+            self.add_item(
+                discord.ui.Button(
+                    label=stars_from_key(key),
+                    style=discord.ButtonStyle.secondary,
+                    custom_id=f"ans:{user_id}:{idx}:{key}",
+                )
+            )
+
+class StartRoomView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="診断を始める",
+        style=discord.ButtonStyle.success,
+        custom_id="start_room_button",
+    )
+    async def start_room_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("サーバー内で押してください。", ephemeral=True)
+            return
+        await create_or_open_room(interaction)
+
+async def post_panel(channel: discord.TextChannel):
+    embed = discord.Embed(
+        title="🎮 診断スタート",
+        description="下のボタンを押すと、あなた専用の診断ルームが作成されます。",
+    )
+    await channel.send(embed=embed, view=StartRoomView())
+
+# =========================================================
+# 固定メッセージ更新（質問Embed）
+# =========================================================
+async def upsert_question_message(channel: discord.TextChannel, user_id: int, idx: int, order: List[int]):
     qid = order[idx]
     q = q_by_id(qid)
 
@@ -350,201 +301,101 @@ async def upsert_question_message(
         await asyncio.to_thread(set_message_id, user_id, msg.id)
         return msg
 
-# ===== 自動削除 =====
+# =========================================================
+# ルーム自動削除
+# =========================================================
 async def schedule_auto_delete(channel: discord.TextChannel, user_id: int, seconds: int):
     await asyncio.sleep(seconds)
     try:
-        ch = await channel.guild.fetch_channel(channel.id)
+        # 念のためまだ存在するか
+        _ = await channel.guild.fetch_channel(channel.id)
     except Exception:
         return
 
-    if is_user_room(ch, user_id):
+    if is_user_room(channel, user_id):
         try:
-            await ch.delete(reason="Auto close after diagnosis")
+            await channel.delete(reason=f"Auto close after diagnosis (user:{user_id})")
         except Exception:
             pass
 
-# ===== 質問送信 =====
-def q_by_id(qid: int) -> dict:
-    # QUESTIONSは小さいので線形でもOK。気になるなら辞書化してもOK。
-    for q in QUESTIONS:
-        if q["id"] == qid:
-            return q
-    raise KeyError(f"question id not found: {qid}")
-
-async def send_question_to_channel(channel: discord.TextChannel, user_id: int, idx: int):
-    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
-    qid = order[idx]
-    q = q_by_id(qid)
-
-    header = progress_text(idx, len(order))
-    await channel.send(f"{header}\nQ{idx+1}. {q['text']}", view=AnswerView(user_id, idx, order))
-
-
-# ===== ボタンUI =====
-def stars_from_key(key: str) -> str:
-    return {"A": "★☆☆☆☆", "B": "★★☆☆☆", "C": "★★★☆☆", "D": "★★★★☆", "E": "★★★★★"}.get(key, "★☆☆☆☆")
-
-
-class AnswerView(discord.ui.View):
-    def __init__(self, user_id: int, idx: int):
-        super().__init__(timeout=None)
-
-        for key in ["A", "B", "C", "D", "E"]:
-            self.add_item(
-                discord.ui.Button(
-                    label=stars_from_key(key),
-                    style=discord.ButtonStyle.secondary,
-                    custom_id=f"ans:{user_id}:{idx}:{key}",
-                )
-            )
-
-
-class AnswerButton(discord.ui.Button):
-    def __init__(self, user_id: int, idx: int, order: list[int], key: str, label: str):
-        super().__init__(
-            style=discord.ButtonStyle.primary,
-            label=f"{key}: {label}"
-        )
-        self.user_id = user_id
-        self.idx = idx
-        self.order = order
-        self.key = key
-
-class StartRoomView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="診断を始める",
-        style=discord.ButtonStyle.success,
-        custom_id="start_room_button"
-    )
-    async def start_room_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.guild is None:
-            await interaction.response.send_message("サーバー内で押してください。", ephemeral=True)
-            return
-        await create_or_open_room(interaction)
-
+# =========================================================
+# ルーム作成・開始
+# =========================================================
 async def create_or_open_room(interaction: discord.Interaction):
     guild = interaction.guild
-    user_id = interaction.user.id
-    channel_name = f"match-{user_id}"
+    assert guild is not None
 
+    member = interaction.user
+    assert isinstance(member, discord.Member)
+
+    user_id = member.id
+    safe_name = safe_channel_name(member.display_name)
+    channel_name = f"match-{safe_name}-{user_id % 10000}"
+
+    # 既存ルーム再利用
     for ch in guild.text_channels:
         if is_user_room(ch, user_id):
             await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
             return
 
+    if guild.me is None:
+        await interaction.response.send_message("Bot情報の取得に失敗しました。少し待ってから再度お試しください。", ephemeral=True)
+        return
+
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=False),
+        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
         guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
     }
 
     ch = await guild.create_text_channel(
         channel_name,
-        topic=f"user:{user_id}",
+        topic=f"user:{user_id} name:{member.display_name}",
         overwrites=overwrites
     )
 
-    reset_user(user_id)
-    reset_order(user_id)
-    reset_message_id(user_id)
+    await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
+    await ch.send("📝 このルームは診断専用です。ボタンで回答してください。")
 
-    order = get_or_create_order(user_id, [q["id"] for q in QUESTIONS])
+    # 初期化（sqliteはブロックするので to_thread）
+    await asyncio.to_thread(reset_user, user_id)
+    await asyncio.to_thread(reset_order, user_id)
+    await asyncio.to_thread(reset_message_id, user_id)
+    await asyncio.to_thread(set_state, user_id, 0)
+
+    order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
     await upsert_question_message(ch, user_id, 0, order)
 
-    await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
-   
-    async def callback(self, interaction: discord.Interaction):
-        # ✅ 3秒制限対策：とにかく最初にACK（ここが最重要）
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-            # 他人の操作は followup で返す（responseはもう使わない）
-        if interaction.user.id != self.user_id:
-            await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
-            return
-
-    try:
-        # --- 回答保存（sqlite等はブロックするので別スレッド） ---
-        q = q_by_id(self.order[self.idx])
-        await asyncio.to_thread(save_answer, self.user_id, q["id"], self.key)
-
-        next_idx = self.idx + 1
-        await asyncio.to_thread(set_state, self.user_id, next_idx)
-
-        # --- 完了 ---
-        if next_idx >= len(self.order):
-            result_text = "✅ **診断完了！**\n\n" + categorized_result(self.user_id)
-
-            mid = get_message_id(self.user_id)
-            msg = None
-            if mid:
-                try:
-                    msg = await interaction.channel.fetch_message(mid)
-                except Exception:
-                    msg = None
-
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
-
-            if msg:
-                await msg.edit(content=result_text + notice, embed=None, view=None)
-            else:
-                await interaction.followup.send(result_text + notice, ephemeral=True)
-
-            asyncio.create_task(schedule_auto_delete(interaction.channel, self.user_id, AUTO_CLOSE_SECONDS))
-            return
-
-        # --- 次の質問へ（固定メッセージを更新） ---
-        await upsert_question_message(interaction.channel, self.user_id, next_idx, self.order)
-
-    except Exception as e:
-        await interaction.followup.send(f"⚠️ エラー：{type(e).__name__}", ephemeral=True)
-        raise
-
-
-
-
-
-# ===== イベント =====
+# =========================================================
+# イベント
+# =========================================================
 @bot.event
 async def on_ready():
-    print("commands:", [c.name for c in bot.tree.get_commands()])
-    global _synced_once
     init_db()
     try:
-        bot.add_view(StartRoomView())
+        bot.add_view(StartRoomView())  # 永続ボタン
     except Exception as e:
         print("add_view failed:", repr(e))
 
-    if not _synced_once:
-        _synced_once = True
-        try:
-            await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-            print("✅ synced on_ready")
-        except Exception as e:
-            print("⚠️ sync failed:", repr(e))
-
+    print("commands:", [c.name for c in bot.tree.get_commands()])
     print(f"Bot起動: {bot.user}")
-
 
 @bot.event
 async def on_member_join(member: discord.Member):
     if member.bot:
         return
+    if WELCOME_CHANNEL_ID <= 0:
+        return
     channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
-    if channel is None:
+    if channel is None or not isinstance(channel, discord.TextChannel):
         return
 
-    # メンバー歓迎（任意）
     await channel.send(f"👋 {member.mention} さん、ようこそ！ボタンを押して診断スタート")
-
-    # 診断パネルを自動設置
     await post_panel(channel)
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
+    # ボタン以外は無視（slash等はdiscord.pyが処理する）
     if interaction.type != discord.InteractionType.component:
         return
 
@@ -553,179 +404,183 @@ async def on_interaction(interaction: discord.Interaction):
     if not isinstance(cid, str) or not cid.startswith("ans:"):
         return
 
+    # ✅ 3秒制限回避：即ACK
     if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
-    _, uid_s, idx_s, key = cid.split(":")
-    user_id = int(uid_s)
-    idx = int(idx_s)
+    try:
+        # ans:{user_id}:{idx}:{key}
+        _, uid_s, idx_s, key = cid.split(":")
+        user_id = int(uid_s)
+        idx = int(idx_s)
 
-    if interaction.user.id != user_id:
-        await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
-        return
+        # 他人操作拒否
+        if interaction.user.id != user_id:
+            await interaction.followup.send("これはあなたの診断ではありません。", ephemeral=True)
+            return
 
-    order = await asyncio.to_thread(
-        get_or_create_order,
-        user_id,
-        [q["id"] for q in QUESTIONS]
-    )
+        # order取得
+        order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
 
-    cur_idx = await asyncio.to_thread(get_state, user_id)
-    if isinstance(cur_idx, int) and 0 <= cur_idx < len(order):
-        idx = cur_idx
+        # idxがズレていたら現在stateを優先
+        cur_idx = await asyncio.to_thread(get_state, user_id)
+        if isinstance(cur_idx, int) and 0 <= cur_idx < len(order):
+            idx = cur_idx
 
-    q = q_by_id(order[idx])
-    await asyncio.to_thread(save_answer, user_id, q["id"], key)
+        # 保存
+        q = q_by_id(order[idx])
+        await asyncio.to_thread(save_answer, user_id, q["id"], key)
 
-    next_idx = idx + 1
-    await asyncio.to_thread(set_state, user_id, next_idx)
+        next_idx = idx + 1
+        await asyncio.to_thread(set_state, user_id, next_idx)
 
-    if next_idx >= len(order):
-        result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-        notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+        # 完了
+        if next_idx >= len(order):
+            result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
 
-        mid = await asyncio.to_thread(get_message_id, user_id)
-        if mid:
-            try:
-                msg = await interaction.channel.fetch_message(mid)
-                await msg.edit(content=result_text + notice, embed=None, view=None)
-            except Exception:
+            mid = await asyncio.to_thread(get_message_id, user_id)
+            if mid:
+                try:
+                    msg = await interaction.channel.fetch_message(mid)
+                    await msg.edit(content=result_text + notice, embed=None, view=None)
+                except Exception:
+                    await interaction.followup.send(result_text + notice, ephemeral=True)
+            else:
                 await interaction.followup.send(result_text + notice, ephemeral=True)
-        else:
-            await interaction.followup.send(result_text + notice, ephemeral=True)
 
-        asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
-        return
-    # --- 次の質問 ---
-    await upsert_question_message(interaction.channel, user_id, next_idx, order)
-    
-# ===== ボタンで開始 =====   
-async def create_or_open_room(interaction: discord.Interaction):
-    guild = interaction.guild
-    member: discord.Member = interaction.user
-    user_id = member.id
+            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+            return
 
-    safe_name = safe_channel_name(member.display_name)
-    # 同名対策（おすすめ）
-    channel_name = f"match-{safe_name}-{user_id % 10000}"
+        # 次の質問へ（固定メッセージ更新）
+        await upsert_question_message(interaction.channel, user_id, next_idx, order)
 
-    # 既存ルーム再利用
-    for ch in guild.text_channels:
-        if is_user_room(ch, user_id):
-            await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
-        return
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ エラー：{type(e).__name__}", ephemeral=True)
+        raise
 
-    # Bot自身(Member)が取れない場合は中断
-    if guild.me is None:
-        await interaction.response.send_message("Bot情報の取得に失敗しました。少し待ってから再度実行してください。", ephemeral=True)
-    return
-
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
-    }
-
-    ch = await guild.create_text_channel(
-        channel_name,
-        topic=f"user:{user_id} name:{member.display_name}",
-        overwrites=overwrites
-    )
-
-    await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
-
-    # 初期化（sqliteはブロックするので to_thread）
-    await asyncio.to_thread(reset_user, user_id)
-    await asyncio.to_thread(reset_order, user_id)
-    await asyncio.to_thread(reset_message_id, user_id)
-
-    # 出題順を作って開始
-    order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
-    await upsert_question_message(ch, user_id, 0, order)
-
-
-# ===== コマンド =====
-
-@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始", guild=discord.Object(id=GUILD_ID))
+# =========================================================
+# コマンド
+# =========================================================
+@bot.tree.command(name="room", description="専用診断ルームを作成し自動で開始")
 async def room(interaction: discord.Interaction):
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
-    return
-    guild = interaction.guild
-    member: discord.Member = interaction.user
-    user_id = member.id
+        return
+    await create_or_open_room(interaction)
 
-    safe_name = safe_channel_name(member.display_name)
-    # 同名対策（おすすめ）
-    channel_name = f"match-{safe_name}-{user_id % 10000}"
-
-    # 既存ルーム再利用
-    for ch in guild.text_channels:
-        if is_user_room(ch, user_id):
-            await interaction.response.send_message(f"既にあります：{ch.mention}", ephemeral=True)
+@bot.tree.command(name="panel", description="診断開始ボタンを設置（運営専用）")
+async def panel(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
-    # Bot自身(Member)が取れない場合は中断
-    if guild.me is None:
-        await interaction.response.send_message("Bot情報の取得に失敗しました。少し待ってから再度実行してください。", ephemeral=True)
-    return
+    if not has_role_id(interaction.user, BOTADMIN_ROLE_ID):
+        await interaction.response.send_message("権限がありません。", ephemeral=True)
+        return
 
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
-    }
+    await post_panel(interaction.channel)  # どこでも実行可
+    await interaction.response.send_message("✅ 設置しました。", ephemeral=True)
 
-    ch = await guild.create_text_channel(
-        channel_name,
-        topic=f"user:{user_id} name:{member.display_name}",
-        overwrites=overwrites
+@bot.tree.command(name="ping", description="動作確認（運営専用）")
+async def ping(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+
+    if not has_role_id(interaction.user, ADMIN_ROLE_ID):
+        await interaction.response.send_message("このコマンドは運営専用です。", ephemeral=True)
+        return
+
+    await interaction.response.send_message("🏓 pong!", ephemeral=True)
+
+@bot.tree.command(
+    name="sync",
+    description="コマンドを同期（運営専用）",
+    guild=discord.Object(id=GUILD_ID) if GUILD_ID > 0 else None
+)
+async def sync_cmd(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+
+    if not has_role_id(interaction.user, ADMIN_ROLE_ID):
+        await interaction.response.send_message("権限がありません。", ephemeral=True)
+        return
+
+    # ✅ 3秒制限回避：先にACK
+    await interaction.response.defer(ephemeral=True)
+
+    # ✅ B案：グローバルコマンドをこのサーバーへコピーして即反映
+    bot.tree.copy_global_to(guild=interaction.guild)
+
+    synced = await bot.tree.sync(guild=interaction.guild)
+    await interaction.followup.send(
+        f"✅ 同期しました（{len(synced)}件）。`/room` が出るか確認してください。",
+        ephemeral=True
     )
 
-    await interaction.response.send_message(f"専用ルームを作成しました：{ch.mention}", ephemeral=True)
-
-    # 初期化（sqliteはブロックするので to_thread）
-    await asyncio.to_thread(reset_user, user_id)
-    await asyncio.to_thread(reset_order, user_id)
-    await asyncio.to_thread(reset_message_id, user_id)
-
-    # 出題順を作って開始
-    order = await asyncio.to_thread(get_or_create_order, user_id, [q["id"] for q in QUESTIONS])
-    await upsert_question_message(ch, user_id, 0, order)
-
-
-
-@bot.tree.command(name="start", description="診断開始", guild=discord.Object(id=GUILD_ID))
-async def start(interaction: discord.Interaction):
-    if not is_user_room(interaction.channel, interaction.user.id):
-        await interaction.response.send_message("ここでは開始できません。/room を使ってください。", ephemeral=True)
+@bot.tree.command(name="logs", description="管理者用：利用状況を表示（Embed）")
+async def logs(interaction: discord.Interaction):
+    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
 
-    idx = get_state(interaction.user.id)
-    await send_question_to_channel(interaction.channel, interaction.user.id, idx)
+    # 任意：管理チャンネル固定にしたいなら
+    if ADMIN_CHANNEL_ID > 0 and interaction.channel_id != ADMIN_CHANNEL_ID:
+        await interaction.response.send_message("このコマンドは管理者チャンネルでのみ使用できます。", ephemeral=True)
+        return
 
-@bot.tree.command(name="match", description="相性TOP3（任意表示）", guild=discord.Object(id=GUILD_ID))
+    if not has_role_id(interaction.user, ADMIN_ROLE_ID):
+        await interaction.response.send_message("権限がありません。", ephemeral=True)
+        return
+
+    total = count_total_users()
+    completed = count_completed_users(len(QUESTIONS))
+    inprogress = count_inprogress_users(len(QUESTIONS))
+    rooms = [ch for ch in interaction.guild.text_channels if ch.name.startswith("match-")]
+
+    embed = discord.Embed(
+        title="📊 診断Bot 利用状況",
+        description="管理者向けの集計情報です。",
+    )
+    embed.add_field(name="総ユーザー数", value=str(total), inline=True)
+    embed.add_field(name="診断完了", value=str(completed), inline=True)
+    embed.add_field(name="診断途中", value=str(inprogress), inline=True)
+    embed.add_field(name="専用ルーム数", value=str(len(rooms)), inline=True)
+    embed.add_field(name="質問数", value=str(len(QUESTIONS)), inline=True)
+    embed.set_footer(text=f"Requested by {interaction.user.display_name}")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+def compatibility_percent(picks_a: dict, picks_b: dict, categories: List[str]) -> int:
+    usable = [c for c in categories if c in picks_a and c in picks_b]
+    if not usable:
+        return 0
+    same = sum(1 for c in usable if picks_a[c] == picks_b[c])
+    return int(round(same / len(usable) * 100))
+
+@bot.tree.command(name="match", description="相性TOP3（任意表示）")
 async def match(interaction: discord.Interaction):
-    # 専用ルーム以外は拒否（あなたの方針）
+    if interaction.guild is None:
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+
+    # 専用ルーム以外は拒否
     if not is_user_room(interaction.channel, interaction.user.id):
         await interaction.response.send_message("専用ルーム内で実行してください。", ephemeral=True)
         return
 
-    # 診断完了してないなら拒否
+    # 診断完了チェック
     if get_state(interaction.user.id) < len(QUESTIONS):
         await interaction.response.send_message("診断が完了していません。先に質問に回答してください。", ephemeral=True)
         return
 
     me_picks, _ = build_profile(interaction.user.id)
 
-    # 比較するカテゴリ（結果表示と同じにする）
-    CATS = ["game_style", "communication", "real_priority", "distance", "money", "play_time", "future"]
+    CATS = ["game_style", "communication", "play_time", "distance", "money", "future"]
 
-    # 全ユーザー候補（answersテーブルから拾う：参加者のみ）
-    # ※ db.pyの追加なしで動く簡易版
-    import sqlite3
-    from db import DB_PATH  # db.pyにDB_PATHがある前提（無ければ追記が必要）
-
+    # 全ユーザー候補（answersテーブルから拾う）
     with sqlite3.connect(DB_PATH) as con:
         cur = con.cursor()
         cur.execute("SELECT DISTINCT user_id FROM answers")
@@ -735,7 +590,7 @@ async def match(interaction: discord.Interaction):
     for uid in user_ids:
         if uid == interaction.user.id:
             continue
-        if get_state(uid) < len(QUESTIONS):  # 未完了は除外
+        if get_state(uid) < len(QUESTIONS):
             continue
         other_picks, _ = build_profile(uid)
         pct = compatibility_percent(me_picks, other_picks, CATS)
@@ -752,126 +607,24 @@ async def match(interaction: discord.Interaction):
     for i, (pct, uid) in enumerate(top, start=1):
         lines.append(f"{i}位：<@{uid}>  **{pct}%**")
 
-    await interaction.response.send_message("\n".join(lines))
+    await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-
-@bot.tree.command(name="close", description="自分の診断ルームを削除", guild=discord.Object(id=GUILD_ID))
+@bot.tree.command(name="close", description="自分の診断ルームを削除")
 async def close(interaction: discord.Interaction):
+    if interaction.guild is None:
+        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
+        return
+
     if is_user_room(interaction.channel, interaction.user.id):
         await interaction.response.send_message("このルームを削除します。", ephemeral=True)
-        await interaction.channel.delete()
+        try:
+            await interaction.channel.delete(reason="User requested close")
+        except Exception:
+            pass
     else:
         await interaction.response.send_message("この部屋は削除できません。", ephemeral=True)
 
-# ===== 管理者用 =====
-@bot.tree.command(name="ping", description="動作確認（運営専用）")
-async def ping(interaction: discord.Interaction):
-
-    # ロールチェック
-    if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message(
-            "このコマンドは運営専用です。",
-            ephemeral=True
-        )
-        return
-
-    await interaction.response.send_message("🏓 pong!", ephemeral=True)
-
-
-@bot.tree.command(name="panel", description="診断開始ボタンを設置（運営専陽）")
-async def panel(interaction: discord.Interaction):
-
-    # ロールチェック
-    if not any(role.id == BOTADMIN_ROLE_ID for role in interaction.user.roles):
-        await interaction.response.send_message(
-            "このコマンドは運営専用です。",
-            ephemeral=True
-        )
-        return
-
-    await post_panel(interaction.channel)
-    await interaction.response.send_message("✅ 設置しました。", ephemeral=True)
-
-
-
-
-@bot.tree.command(name="logs", description="管理者用：利用状況を表示（Embed）", guild=discord.Object(id=GUILD_ID))
-async def logs(interaction: discord.Interaction):
-    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
-        return
-
-    # ✅ 管理者チャンネル限定
-    if ADMIN_CHANNEL_ID and interaction.channel_id != ADMIN_CHANNEL_ID:
-        await interaction.response.send_message(
-            "このコマンドは管理者チャンネルでのみ使用できます。",
-            ephemeral=False
-        )
-        return
-
-    # ✅ 管理者ロール限定
-    if not has_admin_role(interaction.user):
-        await interaction.response.send_message(
-            f"権限がありません（`{ADMIN_ROLE_ID}` ロールが必要です）。",
-            ephemeral=True
-        )
-        return
-
-    total = count_total_users()
-    completed = count_completed_users(len(QUESTIONS))
-    inprogress = count_inprogress_users(len(QUESTIONS))
-    rooms = [ch for ch in interaction.guild.text_channels if ch.name.startswith("match-")]
-
-    # Embed作成
-    embed = discord.Embed(
-        title="📊 診断Bot 利用状況",
-        description="管理者向けの集計情報です。",
-    )
-    embed.add_field(name="総ユーザー数", value=str(total), inline=True)
-    embed.add_field(name="診断完了", value=str(completed), inline=True)
-    embed.add_field(name="診断途中", value=str(inprogress), inline=True)
-    embed.add_field(name="専用ルーム数", value=str(len(rooms)), inline=True)
-
-    embed.add_field(name="質問数", value=str(len(QUESTIONS)), inline=True)
-    embed.add_field(name="管理者ロール", value=f"`{ADMIN_ROLE_NAME}`", inline=True)
-
-    # どのチャンネルで実行されたか等（任意）
-    embed.set_footer(text=f"Requested by {interaction.user.display_name}")
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-
-@bot.tree.command(name="sync", description="コマンドを同期（運営専用）", guild=discord.Object(id=GUILD_ID))
-async def sync_cmd(interaction: discord.Interaction):
-    if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-        await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
-        return
-
-    # ✅ 運営ロール（ADMIN_ROLE_ID）限定
-    if not any(r.id == ADMIN_ROLE_ID for r in interaction.user.roles):
-        await interaction.response.send_message("権限がありません。", ephemeral=True)
-        return
-
-    # ✅ ここがB案の肝：グローバルコマンドをこのサーバーへコピー
-    bot.tree.copy_global_to(guild=interaction.guild)
-
-    synced = await bot.tree.sync(guild=interaction.guild)
-    await interaction.response.send_message(f"✅ 同期しました（{len(synced)}件）。", ephemeral=True)
-
-
-
-
+# =========================================================
+# 起動
+# =========================================================
 bot.run(TOKEN)
-
-
-
-
-
-
-
-
-
-
-
-
