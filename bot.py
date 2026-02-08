@@ -451,7 +451,7 @@ async def on_interaction(interaction: discord.Interaction):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
             notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。" 
             
-            # ✅ 完了したらチャット解放（/match を打てるように）
+        # ✅ 完了したらチャット解放（/match を打てるように）
         if isinstance(interaction.user, discord.Member):
        　　 await unlock_chat_after_done(interaction.channel, interaction.user)
 
@@ -645,6 +645,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
