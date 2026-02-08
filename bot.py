@@ -481,7 +481,8 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            # ✅ 完了したら自動でTOP3を結果の下に付ける
+        
+        # ✅ 完了したら自動でTOP3を結果の下に付ける
         top3_text = build_match_top3_text(user_id)
 
         notice = (
@@ -493,7 +494,7 @@ async def on_interaction(interaction: discord.Interaction):
         if isinstance(interaction.user, discord.Member):
           await unlock_chat_after_done(interaction.channel, interaction.user)
 
-        final_text = result_text + top3_text + notice
+          final_text = result_text + top3_text + notice
 
        mid = await asyncio.to_thread(get_message_id, user_id)
         if mid:
@@ -684,6 +685,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
