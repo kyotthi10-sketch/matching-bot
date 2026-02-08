@@ -26,7 +26,7 @@ from db import (
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
 
-AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "3600"))  # 既定: 5分
+AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))  # 既定: 5分
 BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))        # /panel など
 ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))              # /sync /ping など
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))        # /logs などに使う（任意）
@@ -437,7 +437,7 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
 
             mid = await asyncio.to_thread(get_message_id, user_id)
             if mid:
@@ -628,7 +628,6 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
-
 
 
 
