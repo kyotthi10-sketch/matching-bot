@@ -25,10 +25,10 @@ TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))
 
-BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "0"))   # /panel
-ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "0"))         # /sync /ping /logs
-ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "0"))   # /logs 制限（任意）
-WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "0"))  # joinパネル設置先
+BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))   # /panel
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))         # /sync /ping /logs
+ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "46959301863709089"))   # /logs 制限（任意）
+WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "1466960571688550537"))  # joinパネル設置先
 
 # /match で answers を直接読む用（db.py と揃える）
 DB_PATH = os.environ.get("DB_PATH", "app.db")
@@ -421,7 +421,7 @@ async def on_interaction(interaction: discord.Interaction):
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
             notice = (
-                f"\n\n✅ `/match` が使えるようになりました。"
+                f"\n\n✅ サーバー内の相性TOP3を知りたい人は`/match`と入力してください。"
                 f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
             )
 
@@ -502,7 +502,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
     synced = await bot.tree.sync(guild=interaction.guild)
     await interaction.followup.send(
-        f"✅ 同期しました（{len(synced)}件）。`/room` が出るか確認してください。",
+        f"✅ 同期しました（{len(synced)}件）。`/コマンド` が出るか確認してください。",
         ephemeral=True
     )
 
@@ -612,3 +612,4 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =====================
 bot.run(TOKEN)
+
