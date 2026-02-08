@@ -27,10 +27,10 @@ TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
 
 AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))  # 既定: 5分
-BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))        # /panel など
-ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))              # /sync /ping など
-ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))        # /logs などに使う（任意）
-WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "1466960571688550537"))    # join時にパネルを置く場所
+BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "0"))        # /panel など
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "0"))              # /sync /ping など
+ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "0"))        # /logs などに使う（任意）
+WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "0"))    # join時にパネルを置く場所
 
 # db.py のDBパスと合わせる（db.pyが "app.db" の想定）
 DB_PATH = os.environ.get("DB_PATH", "app.db")
@@ -330,7 +330,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 
     user_id = member.id
     safe_name = safe_channel_name(member.display_name)
-    channel_name = f"診断-{safe_name}-{user_id % 10000}"
+    channel_name = f"match-{safe_name}-{user_id % 10000}"
 
     # 既存ルーム再利用
     for ch in guild.text_channels:
@@ -437,7 +437,7 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
 
             mid = await asyncio.to_thread(get_message_id, user_id)
             if mid:
@@ -516,7 +516,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
     synced = await bot.tree.sync(guild=interaction.guild)
     await interaction.followup.send(
-        f"✅ 同期しました（{len(synced)}件）。`コマンド` が出るか確認してください。",
+        f"✅ 同期しました（{len(synced)}件）。`/room` が出るか確認してください。",
         ephemeral=True
     )
 
@@ -628,6 +628,3 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
-
-
-
