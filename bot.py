@@ -480,7 +480,7 @@ async def on_interaction(interaction: discord.Interaction):
 
         # 完了
         if next_idx >= len(order):
-    result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
+    　　result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
 
     # ✅ 完了したら自動でTOP3を結果の下に付ける
     top3_text = build_match_top3_text(user_id)
@@ -686,6 +686,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
