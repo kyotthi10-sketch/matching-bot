@@ -26,7 +26,7 @@ from db import (
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
 
-AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "3600"))  # 既定: 60分
+AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))  # 既定: 5分
 BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))        # /panel など
 ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))              # /sync /ping など
 ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))        # /logs などに使う（任意）
@@ -98,68 +98,6 @@ def q_by_id(qid: int) -> dict:
         if q["id"] == qid:
             return q
     raise KeyError(f"question id not found: {qid}")
-
-def build_match_top3_text(me_user_id: int) -> str:
-    """完了済みユーザーから相性TOP3（％）を作って返す"""
-    # 比較するカテゴリ（結果表示と揃える）
-    CATS = ["game_style", "communication", "play_time", "distance", "money", "future"]
-
-    # 自分が未完了なら空
-    if get_state(me_user_id) < len(QUESTIONS):
-        return ""
-
-    me_picks, _ = build_profile(me_user_id)
-
-    # answers にいるユーザー一覧を取得
-    try:
-        with sqlite3.connect(DB_PATH) as con:
-            cur = con.cursor()
-            cur.execute("SELECT DISTINCT user_id FROM answers")
-            user_ids = [int(r[0]) for r in cur.fetchall()]
-    except Exception:
-        return "\n\n🏆 **相性TOP3**\n（集計に失敗しました）"
-
-    results = []
-    for uid in user_ids:
-        if uid == me_user_id:
-            continue
-        # 未完了は除外
-        if get_state(uid) < len(QUESTIONS):
-            continue
-
-        other_picks, _ = build_profile(uid)
-        pct = compatibility_percent(me_picks, other_picks, CATS)
-        results.append((pct, uid))
-
-    if not results:
-        return "\n\n🏆 **相性TOP3**\n比較できる相手がまだいません。"
-
-    results.sort(reverse=True, key=lambda x: x[0])
-    top = results[:3]
-
-    lines = ["\n\n🏆 **相性TOP3（カテゴリ一致率）**"]
-    for i, (pct, uid) in enumerate(top, start=1):
-        lines.append(f"{i}位：<@{uid}>  **{pct}%**")
-    return "\n".join(lines)
-
-async def unlock_chat_after_done(
-    channel: discord.TextChannel,
-    member: discord.Member
-):
-    """
-    診断完了後に、そのユーザーだけ発言可能にする
-    （スマホで /match が打てるようにする）
-    """
-    try:
-        await channel.set_permissions(
-            member,
-            view_channel=True,
-            send_messages=True,
-            send_messages_in_threads=True,
-        )
-    except Exception as e:
-        # 権限変更に失敗しても致命的ではないので握りつぶす
-        print("unlock_chat_after_done failed:", repr(e))
 
 # =========================================================
 # Embed（質問表示）
@@ -389,21 +327,10 @@ async def create_or_open_room(interaction: discord.Interaction):
 
     member = interaction.user
     assert isinstance(member, discord.Member)
-    try:
-        user_id = member.id
-        safe_name = safe_channel_name(member.display_name)
-        channel_name = f"診断-{safe_name}-{user_id % 10000}"
-    except discord.Forbidden:
-        await interaction.followup.send(
-            "❌ Botにチャンネル作成権限がありません。\n"
-            "サーバー設定で Botロールに **チャンネル管理(Manage Channels)** を付与し、"
-            "作成先カテゴリでも許可されているか確認してください。",
-            ephemeral=True
-        )
-        return
-    except Exception as e:
-        await interaction.followup.send(f"❌ ルーム作成に失敗しました：{type(e).__name__}", ephemeral=True)
-        return
+
+    user_id = member.id
+    safe_name = safe_channel_name(member.display_name)
+    channel_name = f"診断-{safe_name}-{user_id % 10000}"
 
     # 既存ルーム再利用
     for ch in guild.text_channels:
@@ -418,7 +345,7 @@ async def create_or_open_room(interaction: discord.Interaction):
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True,manage_permissions=True),
+        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
     }
 
     ch = await guild.create_text_channel(
@@ -510,33 +437,20 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
 
-            # ✅ 完了したら自動でTOP3を結果の下に付ける
-            top3_text = build_match_top3_text(user_id)
+            mid = await asyncio.to_thread(get_message_id, user_id)
+            if mid:
+                try:
+                    msg = await interaction.channel.fetch_message(mid)
+                    await msg.edit(content=result_text + notice, embed=None, view=None)
+                except Exception:
+                    await interaction.followup.send(result_text + notice, ephemeral=True)
+            else:
+                await interaction.followup.send(result_text + notice, ephemeral=True)
 
-            notice = (
-                f"\n\n✅ `/match` でも再表示できます。"
-                f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
-        )
-
-        # ✅ 完了したらチャット解放（スマホで /match 打てる）
-        if isinstance(interaction.user, discord.Member):
-            await unlock_chat_after_done(interaction.channel, interaction.user)
-
-        final_text = result_text + top3_text + notice
-
-        mid = await asyncio.to_thread(get_message_id, user_id)
-        if mid:
-            try:
-                msg = await interaction.channel.fetch_message(mid)
-                await msg.edit(content=final_text, embed=None, view=None)
-            except Exception:
-                await interaction.followup.send(final_text, ephemeral=True)
-        else:
-            await interaction.followup.send(final_text, ephemeral=True)
-
-        asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
-        return
+            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+            return
 
         # 次の質問へ（固定メッセージ更新）
         await upsert_question_message(interaction.channel, user_id, next_idx, order)
@@ -651,16 +565,16 @@ async def match(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
+
+    # 専用ルーム以外は拒否
     if not is_user_room(interaction.channel, interaction.user.id):
         await interaction.response.send_message("専用ルーム内で実行してください。", ephemeral=True)
         return
+
+    # 診断完了チェック
     if get_state(interaction.user.id) < len(QUESTIONS):
         await interaction.response.send_message("診断が完了していません。先に質問に回答してください。", ephemeral=True)
         return
-
-        text = build_match_top3_text(interaction.user.id)
-        await interaction.response.send_message(text, ephemeral=True)
-
 
     me_picks, _ = build_profile(interaction.user.id)
 
@@ -714,21 +628,6 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
