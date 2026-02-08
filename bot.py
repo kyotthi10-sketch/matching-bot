@@ -453,7 +453,7 @@ async def on_interaction(interaction: discord.Interaction):
             
         # ✅ 完了したらチャット解放（/match を打てるように）
         if isinstance(interaction.user, discord.Member):
-       　　 await unlock_chat_after_done(interaction.channel, interaction.user)
+            await unlock_chat_after_done(interaction.channel, interaction.user)
 
         mid = await asyncio.to_thread(get_message_id, user_id)
         if mid:
@@ -644,6 +644,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
