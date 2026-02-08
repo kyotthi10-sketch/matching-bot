@@ -496,7 +496,7 @@ async def on_interaction(interaction: discord.Interaction):
 
           final_text = result_text + top3_text + notice
 
-       mid = await asyncio.to_thread(get_message_id, user_id)
+          mid = await asyncio.to_thread(get_message_id, user_id)
         if mid:
             try:
                 msg = await interaction.channel.fetch_message(mid)
@@ -685,6 +685,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
