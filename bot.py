@@ -142,6 +142,24 @@ def build_match_top3_text(me_user_id: int) -> str:
         lines.append(f"{i}位：<@{uid}>  **{pct}%**")
     return "\n".join(lines)
 
+async def unlock_chat_after_done(
+    channel: discord.TextChannel,
+    member: discord.Member
+):
+    """
+    診断完了後に、そのユーザーだけ発言可能にする
+    （スマホで /match が打てるようにする）
+    """
+    try:
+        await channel.set_permissions(
+            member,
+            view_channel=True,
+            send_messages=True,
+            send_messages_in_threads=True,
+        )
+    except Exception as e:
+        # 権限変更に失敗しても致命的ではないので握りつぶす
+        print("unlock_chat_after_done failed:", repr(e))
 
 # =========================================================
 # Embed（質問表示）
@@ -685,6 +703,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
