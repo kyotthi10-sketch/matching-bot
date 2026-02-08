@@ -54,6 +54,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # =========================================================
 # 共通ユーティリティ
 # =========================================================
+async def unlock_chat_after_done(channel: discord.TextChannel, member: discord.Member):
+    """診断完了後に /match を打てるように送信権限を付与"""
+    try:
+        await channel.set_permissions(
+            member,
+            view_channel=True,
+            send_messages=True,
+            send_messages_in_threads=True,
+        )
+    except Exception:
+        pass
+
 def safe_channel_name(name: str) -> str:
     """
     Discordチャンネル名は英小文字/数字/ハイフンが安全
@@ -437,7 +449,11 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。" 
+            # ✅ 完了したらチャット解放（/match を打てるように）
+        if isinstance(interaction.user, discord.Member):
+        await unlock_chat_after_done(interaction.channel, interaction.user)
+
 
             mid = await asyncio.to_thread(get_message_id, user_id)
             if mid:
@@ -628,5 +644,6 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
