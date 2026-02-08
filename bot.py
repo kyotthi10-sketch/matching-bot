@@ -506,8 +506,8 @@ async def on_interaction(interaction: discord.Interaction):
         else:
              await interaction.followup.send(final_text, ephemeral=True)
 
-    asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
-    return
+        asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+        return
 
         # 次の質問へ（固定メッセージ更新）
         await upsert_question_message(interaction.channel, user_id, next_idx, order)
@@ -685,6 +685,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
