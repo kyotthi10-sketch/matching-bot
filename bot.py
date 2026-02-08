@@ -480,21 +480,35 @@ async def on_interaction(interaction: discord.Interaction):
 
         # 完了
         if next_idx >= len(order):
-            result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+    result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
 
-            mid = await asyncio.to_thread(get_message_id, user_id)
-            if mid:
-                try:
-                    msg = await interaction.channel.fetch_message(mid)
-                    await msg.edit(content=result_text + notice, embed=None, view=None)
-                except Exception:
-                    await interaction.followup.send(result_text + notice, ephemeral=True)
-            else:
-                await interaction.followup.send(result_text + notice, ephemeral=True)
+    # ✅ 完了したら自動でTOP3を結果の下に付ける
+    top3_text = build_match_top3_text(user_id)
 
-            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
-            return
+    notice = (
+        f"\n\n✅ `/match` でも再表示できます。"
+        f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+    )
+
+    # ✅ 完了したらチャット解放（スマホで /match 打てる）
+    if isinstance(interaction.user, discord.Member):
+        await unlock_chat_after_done(interaction.channel, interaction.user)
+
+    final_text = result_text + top3_text + notice
+
+    mid = await asyncio.to_thread(get_message_id, user_id)
+    if mid:
+        try:
+            msg = await interaction.channel.fetch_message(mid)
+            await msg.edit(content=final_text, embed=None, view=None)
+        except Exception:
+            await interaction.followup.send(final_text, ephemeral=True)
+    else:
+        await interaction.followup.send(final_text, ephemeral=True)
+
+    asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+    return
+
 
         # 次の質問へ（固定メッセージ更新）
         await upsert_question_message(interaction.channel, user_id, next_idx, order)
@@ -609,16 +623,16 @@ async def match(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.response.send_message("サーバー内で実行してください。", ephemeral=True)
         return
-
-    # 専用ルーム以外は拒否
     if not is_user_room(interaction.channel, interaction.user.id):
         await interaction.response.send_message("専用ルーム内で実行してください。", ephemeral=True)
         return
-
-    # 診断完了チェック
     if get_state(interaction.user.id) < len(QUESTIONS):
         await interaction.response.send_message("診断が完了していません。先に質問に回答してください。", ephemeral=True)
         return
+
+        text = build_match_top3_text(interaction.user.id)
+        await interaction.response.send_message(text, ephemeral=True)
+
 
     me_picks, _ = build_profile(interaction.user.id)
 
