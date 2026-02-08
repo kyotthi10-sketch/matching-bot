@@ -344,7 +344,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        member: discord.PermissionOverwrite(view_channel=True, send_messages=true),
+        member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
         guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
     }
 
@@ -438,18 +438,19 @@ async def on_interaction(interaction: discord.Interaction):
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
             notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
-        mid = await asyncio.to_thread(get_message_id, user_id)
-        
-        if mid:
-            try:
-                msg = await interaction.channel.fetch_message(mid)
-                await msg.edit(content=result_text + notice, embed=None, view=None)
-            except Exception:
-                 await interaction.followup.send(result_text + notice, ephemeral=True)
-        else:
-             await interaction.followup.send(result_text + notice, ephemeral=True)
-        asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
-        return
+
+            mid = await asyncio.to_thread(get_message_id, user_id)
+            if mid:
+                try:
+                    msg = await interaction.channel.fetch_message(mid)
+                    await msg.edit(content=result_text + notice, embed=None, view=None)
+                except Exception:
+                    await interaction.followup.send(result_text + notice, ephemeral=True)
+            else:
+                await interaction.followup.send(result_text + notice, ephemeral=True)
+
+            asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
+            return
 
         # 次の質問へ（固定メッセージ更新）
         await upsert_question_message(interaction.channel, user_id, next_idx, order)
