@@ -407,7 +407,7 @@ async def create_or_open_room(interaction: discord.Interaction):
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         member: discord.PermissionOverwrite(view_channel=True, send_messages=False),
-        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+        guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True,manage_permissions=True),
     }
 
     ch = await guild.create_text_channel(
@@ -703,6 +703,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
