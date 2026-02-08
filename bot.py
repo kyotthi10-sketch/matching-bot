@@ -490,25 +490,24 @@ async def on_interaction(interaction: discord.Interaction):
                    f"\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
                   )
 
-       # ✅ 完了したらチャット解放（スマホで /match 打てる）
-        if isinstance(interaction.user, discord.Member):
-          await unlock_chat_after_done(interaction.channel, interaction.user)
+    # ✅ 完了したらチャット解放（スマホで /match 打てる）
+    if isinstance(interaction.user, discord.Member):
+       await unlock_chat_after_done(interaction.channel, interaction.user)
 
-          final_text = result_text + top3_text + notice
-
-          mid = await asyncio.to_thread(get_message_id, user_id)
-        if mid:
-            try:
-                msg = await interaction.channel.fetch_message(mid)
-                await msg.edit(content=final_text, embed=None, view=None)
-            except Exception:
-               await interaction.followup.send(final_text, ephemeral=True)
-        else:
-             await interaction.followup.send(final_text, ephemeral=True)
+       final_text = result_text + top3_text + notice
+      
+        mid = await asyncio.to_thread(get_message_id, user_id)
+    if mid:
+         try:
+             msg = await interaction.channel.fetch_message(mid)
+             await msg.edit(content=final_text, embed=None, view=None)
+         except Exception:
+         await interaction.followup.send(final_text, ephemeral=True)
+    else:
+        await interaction.followup.send(final_text, ephemeral=True)
 
         asyncio.create_task(schedule_auto_delete(interaction.channel, user_id, AUTO_CLOSE_SECONDS))
         return
-
         # 次の質問へ（固定メッセージ更新）
         await upsert_question_message(interaction.channel, user_id, next_idx, order)
 
@@ -685,6 +684,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
