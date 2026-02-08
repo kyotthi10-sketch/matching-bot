@@ -330,7 +330,7 @@ async def create_or_open_room(interaction: discord.Interaction):
 
     user_id = member.id
     safe_name = safe_channel_name(member.display_name)
-    channel_name = f"match-{safe_name}-{user_id % 10000}"
+    channel_name = f"診断-{safe_name}-{user_id % 10000}"
 
     # 既存ルーム再利用
     for ch in guild.text_channels:
@@ -437,7 +437,7 @@ async def on_interaction(interaction: discord.Interaction):
         # 完了
         if next_idx >= len(order):
             result_text = "✅ **診断完了！**\n\n" + categorized_result(user_id)
-            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//60}分後にこのルームは自動削除されます。"
+            notice = f"\n\n⏳ {AUTO_CLOSE_SECONDS//10}分後にこのルームは自動削除されます。"
 
             mid = await asyncio.to_thread(get_message_id, user_id)
             if mid:
@@ -516,7 +516,7 @@ async def sync_cmd(interaction: discord.Interaction):
 
     synced = await bot.tree.sync(guild=interaction.guild)
     await interaction.followup.send(
-        f"✅ 同期しました（{len(synced)}件）。`/room` が出るか確認してください。",
+        f"✅ 同期しました（{len(synced)}件）。`コマンド` が出るか確認してください。",
         ephemeral=True
     )
 
@@ -628,4 +628,5 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
