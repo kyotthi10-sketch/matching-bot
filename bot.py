@@ -389,10 +389,21 @@ async def create_or_open_room(interaction: discord.Interaction):
 
     member = interaction.user
     assert isinstance(member, discord.Member)
-
-    user_id = member.id
-    safe_name = safe_channel_name(member.display_name)
-    channel_name = f"診断-{safe_name}-{user_id % 10000}"
+    try:
+        user_id = member.id
+        safe_name = safe_channel_name(member.display_name)
+        channel_name = f"診断-{safe_name}-{user_id % 10000}"
+    except discord.Forbidden:
+        await interaction.followup.send(
+            "❌ Botにチャンネル作成権限がありません。\n"
+            "サーバー設定で Botロールに **チャンネル管理(Manage Channels)** を付与し、"
+            "作成先カテゴリでも許可されているか確認してください。",
+            ephemeral=True
+        )
+        return
+    except Exception as e:
+        await interaction.followup.send(f"❌ ルーム作成に失敗しました：{type(e).__name__}", ephemeral=True)
+        return
 
     # 既存ルーム再利用
     for ch in guild.text_channels:
@@ -703,6 +714,7 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
 
 
 
