@@ -26,11 +26,11 @@ from db import (
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
 
-AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "300"))  # 既定: 5分
-BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "0"))        # /panel など
-ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "0"))              # /sync /ping など
-ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "0"))        # /logs などに使う（任意）
-WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "0"))    # join時にパネルを置く場所
+AUTO_CLOSE_SECONDS = int(os.environ.get("AUTO_CLOSE_SECONDS", "3600"))  # 既定: 60分
+BOTADMIN_ROLE_ID = int(os.environ.get("BOTADMIN_ROLE_ID", "1469582684845113467"))        # /panel など
+ADMIN_ROLE_ID = int(os.environ.get("ADMIN_ROLE_ID", "1469624897587118081"))              # /sync /ping など
+ADMIN_CHANNEL_ID = int(os.environ.get("ADMIN_CHANNEL_ID", "1469593018637090897"))        # /logs などに使う（任意）
+WELCOME_CHANNEL_ID = int(os.environ.get("WELCOME_CHANNEL_ID", "1466960571688550537"))    # join時にパネルを置く場所
 
 # db.py のDBパスと合わせる（db.pyが "app.db" の想定）
 DB_PATH = os.environ.get("DB_PATH", "app.db")
@@ -628,3 +628,4 @@ async def close(interaction: discord.Interaction):
 # 起動
 # =========================================================
 bot.run(TOKEN)
+
